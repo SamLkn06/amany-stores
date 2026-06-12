@@ -1,5 +1,7 @@
-from flask import Flask, render_template_string, request, redirect, session
+from flask import Flask, render_template_string, request, redirect, session, send_file
 import sqlite3
+import openpyxl
+import io
 
 app = Flask(__name__)
 app.secret_key = "amany2026secret"
@@ -73,6 +75,7 @@ body { background:#0D0D2B; color:#f0f0f0; font-family:'Raleway',Arial,sans-serif
 select, input { width:100%; padding:14px 16px; margin-bottom:15px; background:#0D0D2B; border:1px solid #2ABFBF55; color:#f0f0f0; border-radius:8px; font-size:15px; font-family:'Raleway',sans-serif; }
 .btn { width:100%; padding:15px; background:linear-gradient(135deg,#E8472A,#c73820); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; letter-spacing:2px; cursor:pointer; text-transform:uppercase; margin-bottom:10px; }
 .btn-cyan { background:linear-gradient(135deg,#2ABFBF,#1a9999); }
+.btn-gold { background:linear-gradient(135deg,#FFD700,#e6c200); color:#0D0D2B; }
 table { width:100%; border-collapse:collapse; }
 th { background:linear-gradient(90deg,#E8472A,#c73820); color:#fff; padding:13px; font-size:12px; letter-spacing:2px; text-transform:uppercase; }
 td { padding:12px; border-bottom:1px solid #2ABFBF22; text-align:center; font-size:14px; color:#ddd; }
@@ -142,6 +145,9 @@ tr:hover td { background:#1a1a4e; }
 
 <div class="card">
 <p class="card-title">Historique des ventes</p>
+<a href="/export" style="text-decoration:none">
+<button class="btn btn-gold" style="margin-bottom:20px">Telecharger Excel</button>
+</a>
 <table>
 <tr><th>ID</th><th>Produit</th><th>Montant</th><th>Telephone</th><th>Date</th><th>Action</th></tr>
 {% for v in ventes %}
@@ -237,6 +243,42 @@ def produit_supprimer(nom):
     conn.close()
     return redirect('/?msg=Produit supprime')
 
+@app.route('/export')
+def export_excel():
+    if not session.get('connecte'):
+        return redirect('/login')
+    conn = sqlite3.connect(DB)
+    ventes = conn.cursor().execute("SELECT * FROM ventes").fetchall()
+    conn.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Ventes AMANY"
+
+    # En-têtes
+    ws.append(["ID", "Produit", "Montant (FCFA)", "Telephone", "Date"])
+
+    # Données
+    for v in ventes:
+        ws.append(list(v))
+
+    # Total
+    ws.append([])
+    ws.append(["", "TOTAL", sum(v[2] for v in ventes), "", ""])
+
+    # Largeur colonnes
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = 20
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(output,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name='ventes_amany.xlsx')
+
 init_db()
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(__import__('os').environ.get('PORT', 5000)))
