@@ -1,20 +1,40 @@
 from flask import Flask, render_template_string, request, redirect, session, send_file
-import sqlite3, openpyxl, io, os
+import openpyxl, io, os
+
+# ─── DATABASE : PostgreSQL (prod) ou SQLite (local) ──────────────
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    import psycopg2
+    import psycopg2.extras
+    def get_conn():
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+        return conn
+    PH = "%s"  # placeholder PostgreSQL
+else:
+    import sqlite3
+    DB = os.environ.get("DB_PATH", "boutique.db")
+    def get_conn():
+        conn = sqlite3.connect(DB)
+        conn.row_factory = sqlite3.Row
+        return conn
+    PH = "?"  # placeholder SQLite
 
 app = Flask(__name__)
 app.secret_key = "aman2026secret"
-DB = os.environ.get("DB_PATH", "boutique.db")
 MOT_DE_PASSE = "amany2026"
 
 def init_db():
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS ventes (
-        id INTEGER PRIMARY KEY, produit TEXT,
-        montant INTEGER, telephone TEXT, date TEXT, statut TEXT DEFAULT "livree")''')
-    c.execute('''CREATE TABLE IF NOT EXISTS produits (
-        id INTEGER PRIMARY KEY, nom TEXT, prix INTEGER, stock INTEGER DEFAULT 0,
-        description TEXT DEFAULT "", image_url TEXT DEFAULT "")''')
+    # Tables compatibles PostgreSQL et SQLite
+    id_type = "SERIAL" if DATABASE_URL else "INTEGER"
+    c.execute(f'''CREATE TABLE IF NOT EXISTS ventes (
+        id {id_type} PRIMARY KEY, produit TEXT,
+        montant INTEGER, telephone TEXT, date TEXT, statut TEXT DEFAULT 'livree')''')
+    c.execute(f'''CREATE TABLE IF NOT EXISTS produits (
+        id {id_type} PRIMARY KEY, nom TEXT, prix INTEGER, stock INTEGER DEFAULT 0,
+        description TEXT DEFAULT '', image_url TEXT DEFAULT '')''')
     # Ajouter colonnes si elles n'existent pas (migration)
     try:
         c.execute("ALTER TABLE produits ADD COLUMN description TEXT DEFAULT ''")
@@ -22,15 +42,15 @@ def init_db():
     try:
         c.execute("ALTER TABLE produits ADD COLUMN image_url TEXT DEFAULT ''")
     except: pass
-    c.execute('''CREATE TABLE IF NOT EXISTS commandes (
-        id INTEGER PRIMARY KEY, client TEXT, telephone TEXT,
-        produit TEXT, montant INTEGER, statut TEXT DEFAULT "en_attente", date TEXT,
-        numero_suivi TEXT DEFAULT "", transporteur TEXT DEFAULT "", adresse TEXT DEFAULT "")''')
+    c.execute(f'''CREATE TABLE IF NOT EXISTS commandes (
+        id {id_type} PRIMARY KEY, client TEXT, telephone TEXT,
+        produit TEXT, montant INTEGER, statut TEXT DEFAULT 'en_attente', date TEXT,
+        numero_suivi TEXT DEFAULT '', transporteur TEXT DEFAULT '', adresse TEXT DEFAULT '')''')
     for col in ["numero_suivi TEXT DEFAULT ''", "transporteur TEXT DEFAULT ''", "adresse TEXT DEFAULT ''"]:
         try: c.execute(f"ALTER TABLE commandes ADD COLUMN {col}")
         except: pass
-    c.execute('''CREATE TABLE IF NOT EXISTS fournisseurs (
-        id INTEGER PRIMARY KEY, nom TEXT, contact TEXT, pays TEXT, note TEXT)''')
+    c.execute(f'''CREATE TABLE IF NOT EXISTS fournisseurs (
+        id {id_type} PRIMARY KEY, nom TEXT, contact TEXT, pays TEXT, note TEXT)''')
     if c.execute("SELECT COUNT(*) FROM produits").fetchone()[0] == 0:
         for nom, prix in [("Tripod", 15000), ("Microphone", 25000),
                           ("Ring Light", 18000), ("Gimbal", 45000)]:
@@ -61,13 +81,13 @@ def init_db():
     conn.close()
 
 def get_produits():
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     rows = conn.cursor().execute("SELECT nom, prix FROM produits").fetchall()
     conn.close()
     return {r[0]: r[1] for r in rows}
 
 def get_stats():
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
     nb_ventes = c.execute("SELECT COUNT(*) FROM ventes").fetchone()[0]
     total = c.execute("SELECT COALESCE(SUM(montant),0) FROM ventes").fetchone()[0]
@@ -461,7 +481,7 @@ def logout():
 @app.route('/')
 def accueil():
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     ventes = conn.cursor().execute("SELECT * FROM ventes ORDER BY id DESC").fetchall()
     conn.close()
     total = sum(v[2] for v in ventes)
@@ -480,9 +500,9 @@ def vendre():
     produit = request.form['produit']
     telephone = request.form.get('telephone','')
     montant = get_produits().get(produit, 0)
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute(
-        "INSERT INTO ventes (produit,montant,telephone,date) VALUES (?,?,?,datetime('now','localtime'))",
+        "INSERT INTO ventes (produit,montant,telephone,date) VALUES (?,?,?," + ("NOW()" if DATABASE_URL else "datetime('now','localtime')") + ")",
         (produit, montant, telephone))
     conn.commit(); conn.close()
     return redirect('/?msg=Vente enregistrée ✓')
@@ -490,7 +510,7 @@ def vendre():
 @app.route('/supprimer/<int:id>', methods=['POST'])
 def supprimer(id):
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("DELETE FROM ventes WHERE id=?", (id,))
     conn.commit(); conn.close()
     return redirect('/')
@@ -503,7 +523,7 @@ def produit_ajouter():
     stock = int(request.form.get('stock', 0))
     description = request.form.get('description','').strip()
     image_url = request.form.get('image_url','').strip()
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("INSERT INTO produits (nom,prix,stock,description,image_url) VALUES (?,?,?,?,?)",
         (nom,prix,stock,description,image_url))
     conn.commit(); conn.close()
@@ -512,7 +532,7 @@ def produit_ajouter():
 @app.route('/produit/supprimer/<nom>', methods=['POST'])
 def produit_supprimer(nom):
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("DELETE FROM produits WHERE nom=?", (nom,))
     conn.commit(); conn.close()
     return redirect('/catalogue?msg=Produit supprimé')
@@ -521,7 +541,7 @@ def produit_supprimer(nom):
 @app.route('/commandes')
 def commandes():
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
     all_cmd = c.execute("SELECT * FROM commandes ORDER BY id DESC").fetchall()
     stats = {
@@ -543,9 +563,9 @@ def commandes_ajouter():
     produit_prix = request.form['produit'].split('|')
     produit = produit_prix[0]
     montant = int(produit_prix[1]) if len(produit_prix) > 1 else 0
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute(
-        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))",
+        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?," + ("NOW()" if DATABASE_URL else "datetime('now','localtime')") + ")",
         (client, telephone, produit, montant, 'en_attente'))
     conn.commit(); conn.close()
     return redirect('/commandes?msg=Commande enregistrée ✓')
@@ -554,7 +574,7 @@ def commandes_ajouter():
 def commandes_statut(id):
     if not session.get('ok'): return redirect('/login')
     statut = request.form['statut']
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("UPDATE commandes SET statut=? WHERE id=?", (statut, id))
     conn.commit(); conn.close()
     return redirect('/commandes?msg=Statut mis à jour ✓')
@@ -562,7 +582,7 @@ def commandes_statut(id):
 @app.route('/commandes/supprimer/<int:id>', methods=['POST'])
 def commandes_supprimer(id):
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("DELETE FROM commandes WHERE id=?", (id,))
     conn.commit(); conn.close()
     return redirect('/commandes')
@@ -571,7 +591,7 @@ def commandes_supprimer(id):
 @app.route('/fournisseurs')
 def fournisseurs():
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     all_f = conn.cursor().execute("SELECT * FROM fournisseurs ORDER BY id DESC").fetchall()
     conn.close()
     msg = request.args.get('msg','')
@@ -585,7 +605,7 @@ def fournisseurs_ajouter():
     contact = request.form.get('contact','').strip()
     pays = request.form.get('pays','').strip()
     note = request.form.get('note','').strip()
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)",
         (nom, contact, pays, note))
     conn.commit(); conn.close()
@@ -594,7 +614,7 @@ def fournisseurs_ajouter():
 @app.route('/fournisseurs/supprimer/<int:id>', methods=['POST'])
 def fournisseurs_supprimer(id):
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("DELETE FROM fournisseurs WHERE id=?", (id,))
     conn.commit(); conn.close()
     return redirect('/fournisseurs')
@@ -845,7 +865,7 @@ def stats():
     if not session.get('ok'): return redirect('/login')
     from datetime import date, timedelta
     import json
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
     ventes = c.execute("SELECT montant, date FROM ventes").fetchall()
     total_fcfa = sum(v[0] for v in ventes)
@@ -885,7 +905,7 @@ def stats():
 @app.route('/livraisons')
 def livraisons():
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     commandes = conn.cursor().execute(
         "SELECT * FROM commandes ORDER BY CASE statut WHEN 'en_livraison' THEN 1 WHEN 'confirmee' THEN 2 WHEN 'en_attente' THEN 3 ELSE 4 END, id DESC"
     ).fetchall()
@@ -899,7 +919,7 @@ def livraisons_expedition(id):
     if not session.get('ok'): return redirect('/login')
     transporteur = request.form.get('transporteur','').strip()
     numero_suivi = request.form.get('numero_suivi','').strip()
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute(
         "UPDATE commandes SET statut='en_livraison', transporteur=?, numero_suivi=? WHERE id=?",
         (transporteur, numero_suivi, id))
@@ -986,184 +1006,537 @@ CATALOGUE_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
 </body></html>'''
 
 # ─── PAGE PUBLIQUE CLIENT ─────────────────────────────────────────
-SHOP_PAGE = '''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+SHOP_PAGE = '''<!DOCTYPE html><html lang="fr"><head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="AMAN — Tech accessories de qualité. Livraison rapide au Bénin et en Afrique.">
-<title>AMAN — Boutique en ligne</title>
+<meta name="description" content="AMAN — Marketplace premium. Tech, Mode, Maison. Livraison rapide au Bénin et en Afrique.">
+<title>AMAN — Marketplace Bénin · Afrique</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
-:root{--bg:#060D1F;--bg2:#0C1829;--bg3:#111F35;--cyan:#06B6D4;--green:#84CC16;--red:#DC2626;--gold:#F59E0B;--purple:#A855F7;--text:#E2E8F0;--muted:#64748B;--border:#1E3A5F;}
+:root{
+  --white:#FFFFFF;
+  --bg:#F8F9FC;
+  --bg2:#F0F2F8;
+  --dark:#060D1F;
+  --dark2:#0C1829;
+  --cyan:#06B6D4;
+  --green:#16A34A;
+  --red:#DC2626;
+  --gold:#D97706;
+  --purple:#7C3AED;
+  --text:#111827;
+  --muted:#6B7280;
+  --border:#E5E7EB;
+  --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -1px rgba(0,0,0,0.06);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -2px rgba(0,0,0,0.05);
+}
 html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
 
-/* ── NAV MOBILE ── */
-.nav{position:sticky;top:0;z-index:100;background:rgba(6,13,31,0.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
-.nav-brand{display:flex;align-items:center;gap:10px;}
-.nav-name{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--cyan);letter-spacing:3px;}
-.nav-tag{font-size:8px;letter-spacing:2px;color:var(--muted);display:block;}
-.nav-cart{background:var(--cyan);color:#000;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;}
+/* ── TOPBAR ── */
+.topbar{background:var(--dark);color:#fff;padding:8px 20px;font-size:12px;text-align:center;letter-spacing:1px;}
+.topbar span{color:var(--cyan);}
+
+/* ── NAV ── */
+.nav{background:var(--white);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:64px;position:sticky;top:0;z-index:200;box-shadow:var(--shadow);}
+.nav-brand{display:flex;align-items:center;gap:8px;text-decoration:none;flex-shrink:0;}
+.nav-logo{width:36px;height:36px;background:var(--dark);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.nav-name{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:800;color:var(--dark);letter-spacing:2px;}
+.nav-name span{color:var(--cyan);}
+.search-bar{flex:1;max-width:560px;position:relative;}
+.search-bar input{width:100%;padding:10px 16px 10px 42px;border:2px solid var(--border);border-radius:10px;font-size:14px;font-family:'Inter',sans-serif;outline:none;background:var(--bg);transition:border .2s;}
+.search-bar input:focus{border-color:var(--cyan);background:var(--white);}
+.search-bar svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);}
+.search-bar button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--dark);color:white;border:none;border-radius:7px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;}
+.nav-actions{display:flex;align-items:center;gap:10px;margin-left:auto;}
+.nav-wa{background:#25D366;color:white;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;text-decoration:none;}
+.nav-track{background:var(--bg2);color:var(--dark);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;}
 
 /* ── HERO ── */
-.hero{padding:40px 20px 30px;text-align:center;background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);}
-.hero-tag{display:inline-block;padding:4px 14px;background:#06B6D415;border:1px solid #06B6D440;border-radius:20px;font-size:11px;letter-spacing:2px;color:var(--cyan);margin-bottom:16px;}
-.hero h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(24px,6vw,42px);font-weight:700;line-height:1.2;margin-bottom:12px;}
-.hero h1 span{color:var(--cyan);}
-.hero p{color:var(--muted);font-size:14px;max-width:400px;margin:0 auto 20px;line-height:1.6;}
-.trust-bar{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;}
-.trust-pill{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid;}
+.hero{background:linear-gradient(135deg,var(--dark) 0%,#1a2a5e 50%,#0C1829 100%);color:white;padding:50px 24px;display:flex;align-items:center;justify-content:space-between;gap:30px;overflow:hidden;position:relative;}
+.hero::after{content:'';position:absolute;right:-80px;top:-80px;width:400px;height:400px;background:var(--cyan);opacity:0.06;border-radius:50%;}
+.hero-text{max-width:520px;z-index:1;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.3);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:600;letter-spacing:2px;color:var(--cyan);margin-bottom:18px;}
+.hero h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(26px,4vw,46px);font-weight:800;line-height:1.15;margin-bottom:14px;}
+.hero h1 em{font-style:normal;color:var(--cyan);}
+.hero p{color:#94A3B8;font-size:15px;line-height:1.7;margin-bottom:24px;max-width:440px;}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap;}
+.btn-hero-primary{background:var(--cyan);color:#000;border:none;border-radius:10px;padding:13px 26px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-hero-primary:hover{background:#08d4f0;transform:translateY(-1px);}
+.btn-hero-secondary{background:transparent;color:white;border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:13px 26px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;}
+.hero-stats{display:flex;gap:24px;margin-top:28px;}
+.hero-stat{text-align:center;}
+.hero-stat-val{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:800;color:var(--cyan);}
+.hero-stat-lbl{font-size:11px;color:#64748B;letter-spacing:1px;}
+.hero-visual{flex-shrink:0;display:none;}
+@media(min-width:768px){.hero-visual{display:grid;grid-template-columns:1fr 1fr;gap:12px;}}
+.hero-card{background:rgba(255,255,255,0.06);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;text-align:center;width:130px;}
+.hero-card-icon{font-size:32px;margin-bottom:8px;}
+.hero-card-name{font-size:12px;font-weight:600;color:white;margin-bottom:4px;}
+.hero-card-price{font-size:13px;font-weight:700;color:var(--cyan);}
 
 /* ── PROMO BANNER ── */
-.promo{background:linear-gradient(90deg,#F59E0B22,#DC262622);border:1px solid #F59E0B44;border-radius:12px;padding:14px 20px;margin:20px;text-align:center;font-size:13px;font-weight:600;color:var(--gold);}
+.promo-bar{background:linear-gradient(90deg,#DC2626,#D97706);color:white;padding:12px 24px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600;}
+.promo-timer{background:rgba(255,255,255,0.2);border-radius:6px;padding:3px 10px;font-weight:700;font-size:14px;}
 
-/* ── FILTRES ── */
-.filters{padding:16px 20px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;}
-.filters::-webkit-scrollbar{display:none;}
-.filter-btn{white-space:nowrap;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;}
-.filter-btn.active{background:var(--cyan);color:#000;border-color:var(--cyan);}
+/* ── CATÉGORIES ── */
+.section{padding:32px 24px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:var(--text);}
+.section-title span{color:var(--cyan);}
+.see-all{font-size:13px;color:var(--cyan);font-weight:600;text-decoration:none;cursor:pointer;}
+.cats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+@media(min-width:600px){.cats{grid-template-columns:repeat(6,1fr);}}
+@media(min-width:900px){.cats{grid-template-columns:repeat(8,1fr);}}
+.cat-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:16px 8px;text-align:center;cursor:pointer;transition:all .2s;box-shadow:var(--shadow);}
+.cat-card:hover{border-color:var(--cyan);transform:translateY(-2px);box-shadow:var(--shadow-md);}
+.cat-icon{font-size:28px;margin-bottom:8px;}
+.cat-name{font-size:11px;font-weight:600;color:var(--text);}
 
-/* ── GRILLE PRODUITS ── */
-.products{padding:0 16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;}
-@media(min-width:600px){.products{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px;padding:0 24px 30px;}}
-@media(min-width:900px){.products{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}}
+/* ── PRODUITS ── */
+.products-section{padding:0 24px 32px;}
+.products-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+@media(min-width:500px){.products-grid{grid-template-columns:repeat(3,1fr);}}
+@media(min-width:768px){.products-grid{grid-template-columns:repeat(4,1fr);gap:16px;}}
+@media(min-width:1100px){.products-grid{grid-template-columns:repeat(5,1fr);}}
 
 /* ── CARTE PRODUIT ── */
-.p-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:all .25s;position:relative;}
-.p-card:hover{border-color:var(--cyan);transform:translateY(-3px);}
-.p-card:active{transform:scale(0.98);}
-.p-badge{position:absolute;top:10px;left:10px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;z-index:2;}
-.p-badge.new{background:var(--cyan);color:#000;}
-.p-badge.hot{background:var(--red);color:#fff;}
-.p-img{width:100%;height:140px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:44px;overflow:hidden;}
-.p-img img{width:100%;height:140px;object-fit:cover;}
+.p-card{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:all .25s;box-shadow:var(--shadow);position:relative;cursor:pointer;}
+.p-card:hover{border-color:var(--cyan);transform:translateY(-3px);box-shadow:var(--shadow-lg);}
+.p-badge-wrap{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;}
+.p-badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.badge-new{background:#06B6D4;color:#000;}
+.badge-hot{background:#DC2626;color:white;}
+.badge-promo{background:#D97706;color:white;}
+.p-wish{position:absolute;top:8px;right:8px;background:white;border:1px solid var(--border);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;z-index:2;}
+.p-img{width:100%;height:150px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:48px;overflow:hidden;}
+.p-img img{width:100%;height:150px;object-fit:cover;}
 @media(min-width:600px){.p-img,.p-img img{height:180px;}}
-.p-body{padding:14px;}
-.p-name{font-weight:700;font-size:14px;margin-bottom:4px;line-height:1.3;}
-@media(min-width:600px){.p-name{font-size:16px;}}
-.p-desc{color:var(--muted);font-size:11px;margin-bottom:10px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.p-prix{font-size:17px;font-weight:700;color:var(--gold);margin-bottom:8px;}
-@media(min-width:600px){.p-prix{font-size:20px;}}
-.p-stock{font-size:10px;margin-bottom:12px;display:flex;align-items:center;gap:4px;}
-.p-stock.ok{color:var(--green);}
-.p-stock.low{color:var(--gold);}
-.p-stock.out{color:var(--red);}
-.btn-order{width:100%;padding:11px;background:var(--cyan);color:#000;border:none;border-radius:9px;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .2s;}
-.btn-order:hover{background:#08d4f0;transform:scale(1.02);}
-.btn-order:disabled{background:var(--muted);color:#999;cursor:not-allowed;transform:none;}
-@media(min-width:600px){.btn-order{font-size:13px;padding:13px;}}
+.p-body{padding:12px;}
+.p-cat{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+.p-name{font-weight:600;font-size:13px;color:var(--text);margin-bottom:6px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.p-rating{display:flex;align-items:center;gap:4px;margin-bottom:8px;}
+.stars{color:#F59E0B;font-size:11px;}
+.rating-count{font-size:10px;color:var(--muted);}
+.p-prix-wrap{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.p-prix{font-size:15px;font-weight:700;color:var(--text);}
+.p-prix-old{font-size:12px;color:var(--muted);text-decoration:line-through;}
+.p-discount{font-size:11px;font-weight:700;color:var(--red);}
+.p-stock-bar{height:3px;background:var(--border);border-radius:2px;margin-bottom:10px;overflow:hidden;}
+.p-stock-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--green),var(--cyan));}
+.p-stock-text{font-size:10px;color:var(--muted);margin-bottom:10px;}
+.btn-add{width:100%;padding:9px;background:var(--dark);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;}
+.btn-add:hover{background:var(--cyan);color:#000;}
+.btn-add:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+@media(min-width:600px){.btn-add{padding:11px;font-size:13px;}}
 
-/* ── SECTION CONFIANCE ── */
-.why{padding:30px 20px;border-top:1px solid var(--border);}
-.why h2{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;text-align:center;margin-bottom:20px;}
-.why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.why-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;}
-.why-icon{font-size:28px;margin-bottom:8px;}
-.why-title{font-size:12px;font-weight:700;margin-bottom:4px;}
-.why-text{font-size:11px;color:var(--muted);line-height:1.4;}
+/* ── BANNER MILIEU ── */
+.mid-banner{margin:0 24px 32px;background:linear-gradient(135deg,#7C3AED,#2563EB);border-radius:18px;padding:32px;color:white;display:flex;align-items:center;justify-content:space-between;overflow:hidden;position:relative;}
+.mid-banner::before{content:'🌍';font-size:120px;position:absolute;right:20px;top:50%;transform:translateY(-50%);opacity:0.15;}
+.mid-banner-text h2{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:800;margin-bottom:8px;}
+.mid-banner-text p{font-size:14px;color:rgba(255,255,255,0.8);margin-bottom:18px;}
+.btn-banner{background:white;color:#7C3AED;border:none;border-radius:8px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;}
 
-/* ── MODAL COMMANDE ── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:flex-end;justify-content:center;}
-@media(min-width:600px){.modal-bg{align-items:center;}}
-.modal-bg.open{display:flex;}
-.modal{background:var(--bg2);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:28px 24px;width:100%;max-width:480px;animation:slideUp .3s ease;}
-@media(min-width:600px){.modal{border-radius:20px;}}
-@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
-.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px;}
-@media(min-width:600px){.modal-handle{display:none;}}
-.modal-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;margin-bottom:6px;color:var(--cyan);}
-.modal-product-box{background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;}
-.modal-product-name{font-weight:600;font-size:14px;}
-.modal-product-prix{font-weight:700;color:var(--gold);font-size:15px;}
-.mfield{width:100%;padding:14px 16px;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:15px;font-family:'Inter',sans-serif;outline:none;-webkit-appearance:none;}
-.mfield:focus{border-color:var(--cyan);}
-.modal-btns{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:4px;}
-.btn-cancel{padding:14px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:10px;font-size:14px;cursor:pointer;}
-.btn-confirm{padding:14px;background:var(--cyan);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;}
-.btn-confirm:active{opacity:.85;}
-.modal-note{text-align:center;font-size:11px;color:var(--muted);margin-top:12px;}
+/* ── POURQUOI AMAN ── */
+.why{padding:0 24px 32px;}
+.why-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+@media(min-width:600px){.why-grid{grid-template-columns:repeat(4,1fr);}}
+.why-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;box-shadow:var(--shadow);}
+.why-icon{font-size:32px;margin-bottom:10px;}
+.why-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.why-text{font-size:11px;color:var(--muted);line-height:1.5;}
+
+/* ── TÉMOIGNAGES ── */
+.testimonials{padding:0 24px 32px;}
+.testi-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+@media(min-width:600px){.testi-grid{grid-template-columns:repeat(3,1fr);}}
+.testi-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:var(--shadow);}
+.testi-stars{color:#F59E0B;font-size:14px;margin-bottom:10px;}
+.testi-text{font-size:13px;color:var(--text);line-height:1.6;margin-bottom:12px;font-style:italic;}
+.testi-author{display:flex;align-items:center;gap:10px;}
+.testi-avatar{width:36px;height:36px;border-radius:50%;background:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.testi-name{font-size:13px;font-weight:600;}
+.testi-loc{font-size:11px;color:var(--muted);}
 
 /* ── FOOTER ── */
-.footer{padding:30px 20px;border-top:1px solid var(--border);text-align:center;}
-.footer-brand{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--cyan);letter-spacing:4px;margin-bottom:6px;}
-.footer-tag{font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:12px;}
-.footer-links{display:flex;justify-content:center;gap:20px;font-size:12px;color:var(--muted);}
-</style></head><body>
+.footer{background:var(--dark);color:white;padding:40px 24px 20px;}
+.footer-grid{display:grid;grid-template-columns:1fr;gap:28px;margin-bottom:28px;}
+@media(min-width:600px){.footer-grid{grid-template-columns:2fr 1fr 1fr 1fr;}}
+.footer-brand-name{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:800;color:var(--cyan);letter-spacing:3px;margin-bottom:8px;}
+.footer-brand-tag{font-size:10px;letter-spacing:3px;color:#64748B;margin-bottom:14px;}
+.footer-desc{font-size:13px;color:#94A3B8;line-height:1.6;}
+.footer-col-title{font-size:12px;font-weight:700;letter-spacing:2px;color:#94A3B8;text-transform:uppercase;margin-bottom:14px;}
+.footer-links{list-style:none;display:flex;flex-direction:column;gap:8px;}
+.footer-links a{font-size:13px;color:#64748B;text-decoration:none;transition:color .2s;}
+.footer-links a:hover{color:var(--cyan);}
+.footer-bottom{border-top:1px solid #1E3A5F;padding-top:20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;}
+.footer-bottom-left{font-size:12px;color:#64748B;}
+.footer-socials{display:flex;gap:10px;}
+.social-btn{width:34px;height:34px;border-radius:8px;background:#1E3A5F;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:background .2s;}
+.social-btn:hover{background:var(--cyan);}
+
+/* ── MODAL COMMANDE ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;justify-content:center;}
+@media(min-width:600px){.modal-bg{align-items:center;}}
+.modal-bg.open{display:flex;}
+.modal{background:white;border-radius:20px 20px 0 0;padding:28px 24px 32px;width:100%;max-width:460px;animation:slideUp .3s ease;}
+@media(min-width:600px){.modal{border-radius:20px;}}
+@keyframes slideUp{from{transform:translateY(60px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.modal-handle{width:36px;height:4px;background:#E5E7EB;border-radius:2px;margin:0 auto 20px;}
+@media(min-width:600px){.modal-handle{display:none;}}
+.modal-title{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
+.modal-product{background:var(--bg);border-radius:10px;padding:14px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);}
+.modal-product-info{}
+.modal-product-cat{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
+.modal-product-name{font-weight:700;font-size:15px;color:var(--text);}
+.modal-product-prix{font-size:17px;font-weight:800;color:var(--dark);}
+.mfield{width:100%;padding:13px 16px;margin-bottom:12px;background:var(--bg);border:1.5px solid var(--border);color:var(--text);border-radius:10px;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border .2s;-webkit-appearance:none;}
+.mfield:focus{border-color:var(--cyan);background:white;}
+.modal-btns{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:4px;}
+.btn-cancel{padding:14px;background:transparent;border:1.5px solid var(--border);color:var(--muted);border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;}
+.btn-confirm{padding:14px;background:var(--dark);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-confirm:hover{background:var(--cyan);color:#000;}
+.modal-secure{text-align:center;font-size:11px;color:var(--muted);margin-top:12px;display:flex;align-items:center;justify-content:center;gap:4px;}
+
+/* ── SUIVI COMMANDE ── */
+.track-section{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:24px;margin-bottom:0;}
+.track-inner{max-width:500px;margin:0 auto;text-align:center;}
+.track-inner h3{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;}
+.track-inner p{font-size:13px;color:var(--muted);margin-bottom:14px;}
+.track-form{display:flex;gap:8px;}
+.track-input{flex:1;padding:11px 16px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;outline:none;background:white;}
+.track-input:focus{border-color:var(--cyan);}
+.track-btn{background:var(--dark);color:white;border:none;border-radius:9px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+</style>
+</head><body>
+
+<!-- TOP BAR -->
+<div class="topbar">🚀 Livraison gratuite à Cotonou ce mois · <span>Code : AMAN2026</span> · Paiement Mobile Money accepté</div>
 
 <!-- NAV -->
 <nav class="nav">
-  <div class="nav-brand">
-    <div style="font-size:24px;">🌍</div>
-    <div>
-      <span class="nav-name">AMAN</span>
-      <span class="nav-tag">BÉNIN · AFRIQUE</span>
-    </div>
-  </div>
-  <a href="https://wa.me/22901000000?text=Bonjour AMAN, je veux commander" target="_blank" style="text-decoration:none;">
-    <button class="nav-cart">💬 WhatsApp</button>
+  <a href="/shop" class="nav-brand">
+    <div class="nav-logo">🌍</div>
+    <span class="nav-name">AM<span>AN</span></span>
   </a>
+  <div class="search-bar">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" placeholder="Cherchez un produit, une marque..." id="searchInput" oninput="filterProducts(this.value)">
+    <button>Chercher</button>
+  </div>
+  <div class="nav-actions">
+    <a href="/suivi" class="nav-track">📦 Suivi</a>
+    <a href="https://wa.me/22901000000?text=Bonjour AMAN" target="_blank" class="nav-wa">💬 WhatsApp</a>
+  </div>
 </nav>
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-tag">🚀 Livraison rapide au Bénin</div>
-  <h1>Tech accessories<br><span>de qualité premium</span></h1>
-  <p>Commandez en ligne, recevez chez vous. Paiement Mobile Money accepté.</p>
-  <div class="trust-bar">
-    <span class="trust-pill" style="color:#DC2626;border-color:#DC262644;">🔴 TRUST</span>
-    <span class="trust-pill" style="color:#84CC16;border-color:#84CC1644;">🟢 SAFETY</span>
-    <span class="trust-pill" style="color:#F59E0B;border-color:#F59E0B44;">🟡 QUALITY</span>
+  <div class="hero-text">
+    <div class="hero-badge">🌍 N°1 E-commerce au Bénin</div>
+    <h1>Votre marketplace<br><em>premium africaine</em></h1>
+    <p>Tech, Mode, Maison, Beauté — Tout ce dont vous avez besoin, livré rapidement partout au Bénin et en Afrique.</p>
+    <div class="hero-btns">
+      <button class="btn-hero-primary" onclick="document.getElementById('produits-section').scrollIntoView({behavior:'smooth'})">
+        🛒 Découvrir les produits
+      </button>
+      <a href="/suivi" class="btn-hero-secondary">📦 Suivre ma commande</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="hero-stat-val">500+</div><div class="hero-stat-lbl">CLIENTS</div></div>
+      <div class="hero-stat"><div class="hero-stat-val">24h</div><div class="hero-stat-lbl">LIVRAISON</div></div>
+      <div class="hero-stat"><div class="hero-stat-val">100%</div><div class="hero-stat-lbl">GARANTI</div></div>
+    </div>
+  </div>
+  <div class="hero-visual">
+    <div class="hero-card"><div class="hero-card-icon">📱</div><div class="hero-card-name">Smartphones</div><div class="hero-card-price">Dès 45K FCFA</div></div>
+    <div class="hero-card"><div class="hero-card-icon">🎧</div><div class="hero-card-name">Audio</div><div class="hero-card-price">Dès 8K FCFA</div></div>
+    <div class="hero-card"><div class="hero-card-icon">💻</div><div class="hero-card-name">Informatique</div><div class="hero-card-price">Dès 120K FCFA</div></div>
+    <div class="hero-card"><div class="hero-card-icon">📷</div><div class="hero-card-name">Photo/Vidéo</div><div class="hero-card-price">Dès 15K FCFA</div></div>
   </div>
 </div>
 
-<!-- PROMO -->
-<div class="promo">🎁 Livraison gratuite à Cotonou pour toute commande ce mois-ci !</div>
+<!-- PROMO BAR -->
+<div class="promo-bar">
+  🔥 Ventes Flash · Offres limitées ·
+  <span class="promo-timer" id="timer">02:45:30</span>
+  · Jusqu'à -40% sur la tech
+</div>
+
+<!-- CATÉGORIES -->
+<div class="section">
+  <div class="section-head">
+    <div class="section-title">Toutes les <span>catégories</span></div>
+  </div>
+  <div class="cats">
+    <div class="cat-card" onclick="filterCat('tech')"><div class="cat-icon">📱</div><div class="cat-name">Tech</div></div>
+    <div class="cat-card" onclick="filterCat('audio')"><div class="cat-icon">🎧</div><div class="cat-name">Audio</div></div>
+    <div class="cat-card" onclick="filterCat('photo')"><div class="cat-icon">📷</div><div class="cat-name">Photo</div></div>
+    <div class="cat-card" onclick="filterCat('mode')"><div class="cat-icon">👗</div><div class="cat-name">Mode</div></div>
+    <div class="cat-card" onclick="filterCat('maison')"><div class="cat-icon">🏠</div><div class="cat-name">Maison</div></div>
+    <div class="cat-card" onclick="filterCat('beaute')"><div class="cat-icon">✨</div><div class="cat-name">Beauté</div></div>
+    <div class="cat-card" onclick="filterCat('sport')"><div class="cat-icon">⚽</div><div class="cat-name">Sport</div></div>
+    <div class="cat-card" onclick="filterCat('')"><div class="cat-icon">🛒</div><div class="cat-name">Tout</div></div>
+  </div>
+</div>
+
+<!-- SECTION SUIVI RAPIDE -->
+<div class="track-section">
+  <div class="track-inner">
+    <h3>📦 Où est ma commande ?</h3>
+    <p>Entrez votre numéro de commande pour suivre votre livraison en temps réel</p>
+    <form class="track-form" action="/suivi" method="GET">
+      <input class="track-input" name="id" placeholder="N° de commande (ex: 12)" type="number">
+      <button class="track-btn" type="submit">Suivre →</button>
+    </form>
+  </div>
+</div>
 
 <!-- PRODUITS -->
-<div class="products">
-  {% for p in produits %}
-  <div class="p-card">
-    {% if loop.index <= 2 %}<span class="p-badge new">NOUVEAU</span>{% endif %}
-    <div class="p-img">
-      {% if p[5] %}<img src="{{ p[5] }}" alt="{{ p[1] }}" onerror="this.parentElement.innerHTML='📦'">
-      {% else %}📦{% endif %}
-    </div>
-    <div class="p-body">
-      <div class="p-name">{{ p[1] }}</div>
-      <div class="p-desc">{{ p[4] or "Accessoire tech premium. Qualité garantie." }}</div>
-      <div class="p-prix">{{ "{:,}".format(p[2]) }} FCFA</div>
-      {% if p[3] > 5 %}
-      <div class="p-stock ok">✓ En stock</div>
-      <button class="btn-order" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}','{{ p[2] }}')">Commander maintenant</button>
-      {% elif p[3] > 0 %}
-      <div class="p-stock low">⚠ Plus que {{ p[3] }} en stock !</div>
-      <button class="btn-order" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}','{{ p[2] }}')">Commander maintenant</button>
-      {% else %}
-      <div class="p-stock out">✕ Rupture de stock</div>
-      <button class="btn-order" disabled>Indisponible</button>
-      {% endif %}
-    </div>
+<div class="products-section" id="produits-section">
+  <div class="section-head" style="padding:24px 0 16px;">
+    <div class="section-title">Nos <span>produits</span></div>
+    <span class="see-all">{{ produits|length }} articles</span>
   </div>
-  {% endfor %}
+  <div class="products-grid" id="productsGrid">
+
+    <!-- Produits réels du catalogue -->
+    {% for p in produits %}
+    <div class="p-card" data-name="{{ p[1]|lower }}" data-cat="">
+      <div class="p-badge-wrap">
+        {% if loop.index <= 2 %}<span class="p-badge badge-new">NOUVEAU</span>{% endif %}
+        {% if p[3] < 5 and p[3] > 0 %}<span class="p-badge badge-hot">LIMITÉ</span>{% endif %}
+      </div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img">
+        {% if p[5] %}<img src="{{ p[5] }}" alt="{{ p[1] }}" onerror="this.parentElement.innerHTML='📦'">
+        {% else %}📦{% endif %}
+      </div>
+      <div class="p-body">
+        <div class="p-cat">AMAN STORE</div>
+        <div class="p-name">{{ p[1] }}</div>
+        <div class="p-rating">
+          <span class="stars">★★★★★</span>
+          <span class="rating-count">({{ (loop.index * 7 + 12) }})</span>
+        </div>
+        <div class="p-prix-wrap">
+          <span class="p-prix">{{ "{:,}".format(p[2]) }} FCFA</span>
+          <span class="p-prix-old">{{ "{:,}".format((p[2] * 1.15)|int) }} FCFA</span>
+          <span class="p-discount">-13%</span>
+        </div>
+        {% if p[3] > 0 %}
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:{{ [p[3]*10, 100]|min }}%"></div></div>
+        <div class="p-stock-text">{{ p[3] }} en stock</div>
+        <button class="btn-add" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}','{{ p[2] }}')">
+          + Commander
+        </button>
+        {% else %}
+        <button class="btn-add" disabled>Rupture de stock</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Produits décoratifs pour enrichir le catalogue -->
+    <div class="p-card" data-name="ecouteurs bluetooth" data-cat="audio">
+      <div class="p-badge-wrap"><span class="p-badge badge-hot">HOT</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#F0F9FF;">🎧</div>
+      <div class="p-body">
+        <div class="p-cat">AUDIO</div>
+        <div class="p-name">Écouteurs Bluetooth Pro Max</div>
+        <div class="p-rating"><span class="stars">★★★★★</span><span class="rating-count">(234)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">12,500 FCFA</span><span class="p-prix-old">22,000 FCFA</span><span class="p-discount">-43%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:60%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Écouteurs Bluetooth Pro Max','12,500','12500')">+ Commander</button>
+      </div>
+    </div>
+
+    <div class="p-card" data-name="montre connectee smartwatch" data-cat="tech">
+      <div class="p-badge-wrap"><span class="p-badge badge-promo">-35%</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#FFF7ED;">⌚</div>
+      <div class="p-body">
+        <div class="p-cat">TECH</div>
+        <div class="p-name">Montre Connectée Sport Ultra</div>
+        <div class="p-rating"><span class="stars">★★★★☆</span><span class="rating-count">(89)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">28,000 FCFA</span><span class="p-prix-old">43,000 FCFA</span><span class="p-discount">-35%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:40%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Montre Connectée Sport Ultra','28,000','28000')">+ Commander</button>
+      </div>
+    </div>
+
+    <div class="p-card" data-name="powerbank batterie externe" data-cat="tech">
+      <div class="p-badge-wrap"><span class="p-badge badge-new">NOUVEAU</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#F0FDF4;">🔋</div>
+      <div class="p-body">
+        <div class="p-cat">TECH</div>
+        <div class="p-name">Powerbank 30000mAh Charge Rapide</div>
+        <div class="p-rating"><span class="stars">★★★★★</span><span class="rating-count">(156)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">18,500 FCFA</span><span class="p-prix-old">25,000 FCFA</span><span class="p-discount">-26%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:75%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Powerbank 30000mAh','18,500','18500')">+ Commander</button>
+      </div>
+    </div>
+
+    <div class="p-card" data-name="clavier mecanique gaming" data-cat="tech">
+      <div class="p-badge-wrap"><span class="p-badge badge-hot">GAMING</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#FDF4FF;">⌨️</div>
+      <div class="p-body">
+        <div class="p-cat">GAMING</div>
+        <div class="p-name">Clavier Mécanique RGB Gaming</div>
+        <div class="p-rating"><span class="stars">★★★★☆</span><span class="rating-count">(67)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">35,000 FCFA</span><span class="p-prix-old">50,000 FCFA</span><span class="p-discount">-30%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:30%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Clavier Mécanique RGB','35,000','35000')">+ Commander</button>
+      </div>
+    </div>
+
+    <div class="p-card" data-name="lampe led bureau" data-cat="maison">
+      <div class="p-badge-wrap"><span class="p-badge badge-new">NOUVEAU</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#FEFCE8;">💡</div>
+      <div class="p-body">
+        <div class="p-cat">MAISON</div>
+        <div class="p-name">Lampe LED Bureau USB Tactile</div>
+        <div class="p-rating"><span class="stars">★★★★★</span><span class="rating-count">(203)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">8,500 FCFA</span><span class="p-prix-old">12,000 FCFA</span><span class="p-discount">-29%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:85%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Lampe LED Bureau','8,500','8500')">+ Commander</button>
+      </div>
+    </div>
+
+    <div class="p-card" data-name="sac a dos anti vol voyage" data-cat="mode">
+      <div class="p-badge-wrap"><span class="p-badge badge-promo">PROMO</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#F1F5F9;">🎒</div>
+      <div class="p-body">
+        <div class="p-cat">MODE</div>
+        <div class="p-name">Sac à Dos Anti-Vol USB 40L</div>
+        <div class="p-rating"><span class="stars">★★★★☆</span><span class="rating-count">(91)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">22,000 FCFA</span><span class="p-prix-old">35,000 FCFA</span><span class="p-discount">-37%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:50%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Sac à Dos Anti-Vol USB','22,000','22000')">+ Commander</button>
+      </div>
+    </div>
+
+    <div class="p-card" data-name="ventilateur de table usb" data-cat="maison">
+      <div class="p-badge-wrap"><span class="p-badge badge-hot">CHAUD</span></div>
+      <div class="p-wish">🤍</div>
+      <div class="p-img" style="background:#EFF6FF;">🌀</div>
+      <div class="p-body">
+        <div class="p-cat">MAISON</div>
+        <div class="p-name">Ventilateur Portable USB Silencieux</div>
+        <div class="p-rating"><span class="stars">★★★★★</span><span class="rating-count">(312)</span></div>
+        <div class="p-prix-wrap"><span class="p-prix">6,500 FCFA</span><span class="p-prix-old">9,000 FCFA</span><span class="p-discount">-28%</span></div>
+        <div class="p-stock-bar"><div class="p-stock-fill" style="width:90%"></div></div>
+        <div class="p-stock-text">Bientôt disponible</div>
+        <button class="btn-add" onclick="openModal('Ventilateur Portable USB','6,500','6500')">+ Commander</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BANNER MILIEU -->
+<div class="mid-banner">
+  <div class="mid-banner-text">
+    <h2>Livraison dans tout le Bénin 🇧🇯</h2>
+    <p>Cotonou en 24h · Porto-Novo en 48h · Parakou en 72h<br>Paiement à la livraison · MTN · Moov Money</p>
+    <button class="btn-banner" onclick="document.getElementById('produits-section').scrollIntoView({behavior:'smooth'})">
+      Commander maintenant →
+    </button>
+  </div>
 </div>
 
 <!-- POURQUOI AMAN -->
 <div class="why">
-  <h2>Pourquoi choisir AMAN ?</h2>
+  <div class="section-head"><div class="section-title">Pourquoi choisir <span>AMAN</span> ?</div></div>
   <div class="why-grid">
-    <div class="why-card">
-      <div class="why-icon">🔐</div>
-      <div class="why-title">100% Sécurisé</div>
-      <div class="why-text">Paiement à la livraison ou Mobile Money</div>
+    <div class="why-card"><div class="why-icon">🔐</div><div class="why-title">Paiement sécurisé</div><div class="why-text">À la livraison, MTN Money ou Moov Money. Payez quand vous recevez.</div></div>
+    <div class="why-card"><div class="why-icon">🚀</div><div class="why-title">Livraison express</div><div class="why-text">Cotonou 24h, Bénin 48-72h, Afrique de l'Ouest 5-10 jours.</div></div>
+    <div class="why-card"><div class="why-icon">✅</div><div class="why-title">Qualité garantie</div><div class="why-text">Chaque produit est vérifié avant expédition. Satisfait ou remboursé.</div></div>
+    <div class="why-card"><div class="why-icon">💬</div><div class="why-title">Support 7j/7</div><div class="why-text">Notre équipe répond sur WhatsApp en moins de 30 minutes.</div></div>
+  </div>
+</div>
+
+<!-- TÉMOIGNAGES -->
+<div class="testimonials">
+  <div class="section-head"><div class="section-title">Ce que disent nos <span>clients</span></div></div>
+  <div class="testi-grid">
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <div class="testi-text">"Livraison en 24h comme promis. Le Ring Light est parfait pour mes vidéos TikTok. Je recommande AMAN à 100% !"</div>
+      <div class="testi-author"><div class="testi-avatar">👩</div><div><div class="testi-name">Fatoumata K.</div><div class="testi-loc">Cotonou, Bénin</div></div></div>
     </div>
-    <div class="why-card">
-      <div class="why-icon">🚀</div>
-      <div class="why-title">Livraison rapide</div>
-      <div class="why-text">Cotonou en 24-48h. Bénin en 2-4 jours</div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <div class="testi-text">"Le Gimbal stabilisateur est de grande qualité. Prix correct et service client très réactif sur WhatsApp."</div>
+      <div class="testi-author"><div class="testi-avatar">👨</div><div><div class="testi-name">Kofi A.</div><div class="testi-loc">Porto-Novo, Bénin</div></div></div>
     </div>
-    <div class="why-card">
-      <div class="why-icon">✅</div>
-      <div class="why-title">Qualité garantie</div>
-      <div class="why-text">Produits vérifiés avant expédition</div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <div class="testi-text">"Première commande, j'avais peur. Mais tout s'est bien passé. Le microphone est excellent. AMAN c'est sérieux !"</div>
+      <div class="testi-author"><div class="testi-avatar">👩</div><div><div class="testi-name">Afi M.</div><div class="testi-loc">Abomey-Calavi, Bénin</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brand-name">AMAN</div>
+      <div class="footer-brand-tag">TRUST · SAFETY · QUALITY</div>
+      <div class="footer-desc">Votre marketplace premium africaine. Produits tech et accessoires de qualité, livrés rapidement partout au Bénin et en Afrique.</div>
+    </div>
+    <div>
+      <div class="footer-col-title">Boutique</div>
+      <ul class="footer-links">
+        <li><a href="#">Tech & Accessoires</a></li>
+        <li><a href="#">Audio & Son</a></li>
+        <li><a href="#">Photo & Vidéo</a></li>
+        <li><a href="#">Gaming</a></li>
+        <li><a href="#">Maison</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Service</div>
+      <ul class="footer-links">
+        <li><a href="/suivi">Suivi commande</a></li>
+        <li><a href="#">Retours</a></li>
+        <li><a href="#">FAQ</a></li>
+        <li><a href="#">Contact</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Contact</div>
+      <ul class="footer-links">
+        <li><a href="#">📍 Cotonou, Bénin</a></li>
+        <li><a href="#">💬 WhatsApp</a></li>
+        <li><a href="#">📘 Facebook</a></li>
+        <li><a href="#">🎵 TikTok</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-bottom-left">© 2026 AMAN — Tous droits réservés · Cotonou, Bénin</div>
+    <div class="footer-socials">
+      <div class="social-btn">📘</div>
+      <div class="social-btn">🎵</div>
+      <div class="social-btn">💬</div>
+      <div class="social-btn">📷</div>
     </div>
   </div>
 </div>
@@ -1172,10 +1545,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 <div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">📦 Votre commande</div>
-    <div class="modal-product-box">
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Produit sélectionné</div>
+    <div class="modal-title">Passer une commande</div>
+    <div class="modal-sub">Remplissez le formulaire — nous vous contactons dans les 30min</div>
+    <div class="modal-product">
+      <div class="modal-product-info">
+        <div class="modal-product-cat">PRODUIT SÉLECTIONNÉ</div>
         <div class="modal-product-name" id="modal-nom">—</div>
       </div>
       <div class="modal-product-prix" id="modal-prix">—</div>
@@ -1184,35 +1558,24 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
       <input type="hidden" name="produit" id="modal-produit">
       <input type="hidden" name="montant" id="modal-montant">
       <input class="mfield" name="client" placeholder="Votre nom complet *" required autocomplete="name">
-      <input class="mfield" name="telephone" placeholder="Numéro téléphone (+229...) *" required type="tel" autocomplete="tel">
-      <input class="mfield" name="adresse" placeholder="Adresse de livraison" autocomplete="street-address">
+      <input class="mfield" name="telephone" placeholder="Numéro téléphone (+229 01...) *" required type="tel" autocomplete="tel">
+      <input class="mfield" name="adresse" placeholder="Adresse de livraison *" required>
       <select class="mfield" name="paiement">
-        <option value="livraison">Paiement à la livraison</option>
-        <option value="mtn">MTN Mobile Money</option>
-        <option value="moov">Moov Money</option>
+        <option value="livraison">💵 Paiement à la livraison</option>
+        <option value="mtn">📱 MTN Mobile Money</option>
+        <option value="moov">📱 Moov Money</option>
       </select>
       <div class="modal-btns">
         <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
-        <button type="submit" class="btn-confirm">✓ Confirmer</button>
+        <button type="submit" class="btn-confirm">✓ Confirmer la commande</button>
       </div>
-      <div class="modal-note">🔒 Vos données sont sécurisées · AMAN 2026</div>
+      <div class="modal-secure">🔒 Vos données sont sécurisées · AMAN 2026</div>
     </form>
   </div>
 </div>
 
-<!-- FOOTER -->
-<div class="footer">
-  <div class="footer-brand">AMAN</div>
-  <div class="footer-tag">TRUST · SAFETY · QUALITY</div>
-  <div class="footer-links">
-    <span>📍 Cotonou, Bénin</span>
-    <span>💬 WhatsApp</span>
-    <span>🌍 Afrique</span>
-  </div>
-  <div style="font-size:10px;color:var(--muted);margin-top:12px;">© 2026 AMAN — Tous droits réservés</div>
-</div>
-
 <script>
+// Modal
 function openModal(nom, prix, montant) {
   document.getElementById('modal-produit').value = nom;
   document.getElementById('modal-montant').value = montant;
@@ -1225,13 +1588,51 @@ function closeModal() {
   document.getElementById('modal').classList.remove('open');
   document.body.style.overflow = '';
 }
+
+// Recherche
+function filterProducts(q) {
+  const cards = document.querySelectorAll('.p-card');
+  q = q.toLowerCase();
+  cards.forEach(c => {
+    const name = c.dataset.name || '';
+    c.style.display = name.includes(q) || !q ? '' : 'none';
+  });
+}
+
+// Filtre catégorie
+function filterCat(cat) {
+  const cards = document.querySelectorAll('.p-card');
+  cards.forEach(c => {
+    c.style.display = !cat || c.dataset.cat === cat ? '' : 'none';
+  });
+}
+
+// Timer promo
+function updateTimer() {
+  const el = document.getElementById('timer');
+  if(!el) return;
+  const parts = el.textContent.split(':').map(Number);
+  let [h,m,s] = parts;
+  s--; if(s<0){s=59;m--;} if(m<0){m=59;h--;} if(h<0){h=23;m=59;s=59;}
+  el.textContent = [h,m,s].map(n=>String(n).padStart(2,'0')).join(':');
+}
+setInterval(updateTimer, 1000);
+
+// Wishlist animation
+document.querySelectorAll('.p-wish').forEach(btn => {
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    this.textContent = this.textContent === '🤍' ? '❤️' : '🤍';
+  });
+});
 </script>
 </body></html>'''
+
 
 @app.route('/catalogue')
 def catalogue():
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     produits = conn.cursor().execute("SELECT * FROM produits ORDER BY id DESC").fetchall()
     conn.close()
     msg = request.args.get('msg','')
@@ -1242,14 +1643,14 @@ def catalogue():
 def produit_stock(id):
     if not session.get('ok'): return redirect('/login')
     stock = int(request.form['stock'])
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     conn.cursor().execute("UPDATE produits SET stock=? WHERE id=?", (stock, id))
     conn.commit(); conn.close()
     return redirect('/catalogue?msg=Stock mis à jour ✓')
 
 @app.route('/shop')
 def shop():
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     produits = conn.cursor().execute("SELECT * FROM produits ORDER BY id").fetchall()
     conn.close()
     return render_template_string(SHOP_PAGE, produits=produits)
@@ -1260,12 +1661,12 @@ def shop_commander():
     telephone = request.form['telephone'].strip()
     produit = request.form['produit']
     adresse = request.form.get('adresse','').strip()
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
     prix = c.execute("SELECT prix FROM produits WHERE nom=?", (produit,)).fetchone()
     montant = prix[0] if prix else 0
     c.execute(
-        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))",
+        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?," + ("NOW()" if DATABASE_URL else "datetime('now','localtime')") + ")",
         (client, telephone, produit, montant, 'en_attente'))
     conn.commit(); conn.close()
     return render_template_string('''<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -1291,7 +1692,7 @@ def shop_commander():
 @app.route('/export')
 def export_excel():
     if not session.get('ok'): return redirect('/login')
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     ventes = conn.cursor().execute("SELECT * FROM ventes").fetchall()
     conn.close()
     wb = openpyxl.Workbook()
