@@ -2,23 +2,13 @@ from flask import Flask, render_template_string, request, redirect, session, sen
 import openpyxl, io, os
 
 # ─── DATABASE : PostgreSQL (prod) ou SQLite (local) ──────────────
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if DATABASE_URL:
-    import psycopg2
-    import psycopg2.extras
-    def get_conn():
-        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-        return conn
-    PH = "%s"  # placeholder PostgreSQL
-else:
-    import sqlite3
-    DB = os.environ.get("DB_PATH", "boutique.db")
-    def get_conn():
-        conn = sqlite3.connect(DB)
-        conn.row_factory = sqlite3.Row
-        return conn
-    PH = "?"  # placeholder SQLite
+import sqlite3
+DB = os.environ.get("DB_PATH", "boutique.db")
+def get_conn():
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    return conn
+PH = "?"
 
 app = Flask(__name__)
 app.secret_key = "aman2026secret"
@@ -28,10 +18,10 @@ def init_db():
     conn = get_conn()
     c = conn.cursor()
     # Tables compatibles PostgreSQL et SQLite
-    id_type = "SERIAL" if DATABASE_URL else "INTEGER"
+    id_type = "INTEGER"
     c.execute(f'''CREATE TABLE IF NOT EXISTS ventes (
         id {id_type} PRIMARY KEY, produit TEXT,
-        montant INTEGER, telephone TEXT, date TEXT, statut TEXT DEFAULT 'livree')''')
+        montant INTEGER, telephone TEXT, date TEXT, statut TEXT DEFAULT "livree")''')
     c.execute(f'''CREATE TABLE IF NOT EXISTS produits (
         id {id_type} PRIMARY KEY, nom TEXT, prix INTEGER, stock INTEGER DEFAULT 0,
         description TEXT DEFAULT '', image_url TEXT DEFAULT '')''')
@@ -44,7 +34,7 @@ def init_db():
     except: pass
     c.execute(f'''CREATE TABLE IF NOT EXISTS commandes (
         id {id_type} PRIMARY KEY, client TEXT, telephone TEXT,
-        produit TEXT, montant INTEGER, statut TEXT DEFAULT 'en_attente', date TEXT,
+        produit TEXT, montant INTEGER, statut TEXT DEFAULT "en_attente", date TEXT,
         numero_suivi TEXT DEFAULT '', transporteur TEXT DEFAULT '', adresse TEXT DEFAULT '')''')
     for col in ["numero_suivi TEXT DEFAULT ''", "transporteur TEXT DEFAULT ''", "adresse TEXT DEFAULT ''"]:
         try: c.execute(f"ALTER TABLE commandes ADD COLUMN {col}")
