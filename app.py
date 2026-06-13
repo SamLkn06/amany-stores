@@ -13,7 +13,15 @@ def init_db():
         id INTEGER PRIMARY KEY, produit TEXT,
         montant INTEGER, telephone TEXT, date TEXT, statut TEXT DEFAULT "livree")''')
     c.execute('''CREATE TABLE IF NOT EXISTS produits (
-        id INTEGER PRIMARY KEY, nom TEXT, prix INTEGER, stock INTEGER DEFAULT 0)''')
+        id INTEGER PRIMARY KEY, nom TEXT, prix INTEGER, stock INTEGER DEFAULT 0,
+        description TEXT DEFAULT "", image_url TEXT DEFAULT "")''')
+    # Ajouter colonnes si elles n'existent pas (migration)
+    try:
+        c.execute("ALTER TABLE produits ADD COLUMN description TEXT DEFAULT ''")
+    except: pass
+    try:
+        c.execute("ALTER TABLE produits ADD COLUMN image_url TEXT DEFAULT ''")
+    except: pass
     c.execute('''CREATE TABLE IF NOT EXISTS commandes (
         id INTEGER PRIMARY KEY, client TEXT, telephone TEXT,
         produit TEXT, montant INTEGER, statut TEXT DEFAULT "en_attente", date TEXT)''')
@@ -487,10 +495,13 @@ def produit_ajouter():
     nom = request.form['nom'].strip()
     prix = int(request.form['prix'])
     stock = int(request.form.get('stock', 0))
+    description = request.form.get('description','').strip()
+    image_url = request.form.get('image_url','').strip()
     conn = sqlite3.connect(DB)
-    conn.cursor().execute("INSERT INTO produits (nom,prix,stock) VALUES (?,?,?)", (nom,prix,stock))
+    conn.cursor().execute("INSERT INTO produits (nom,prix,stock,description,image_url) VALUES (?,?,?,?,?)",
+        (nom,prix,stock,description,image_url))
     conn.commit(); conn.close()
-    return redirect('/?msg=Produit ajouté ✓')
+    return redirect('/catalogue?msg=Produit ajouté ✓')
 
 @app.route('/produit/supprimer/<nom>', methods=['POST'])
 def produit_supprimer(nom):
@@ -498,7 +509,7 @@ def produit_supprimer(nom):
     conn = sqlite3.connect(DB)
     conn.cursor().execute("DELETE FROM produits WHERE nom=?", (nom,))
     conn.commit(); conn.close()
-    return redirect('/?msg=Produit supprimé')
+    return redirect('/catalogue?msg=Produit supprimé')
 
 # ─── COMMANDES ───────────────────────────────────────────────────
 @app.route('/commandes')
@@ -582,10 +593,279 @@ def fournisseurs_supprimer(id):
     conn.commit(); conn.close()
     return redirect('/fournisseurs')
 
+# ─── CATALOGUE ADMIN ────────────────────────────────────────────
+CATALOGUE_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Catalogue</title>
+<style>{{ css }}
+.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;margin-top:20px;}
+.prod-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border .2s;}
+.prod-card:hover{border-color:var(--cyan);}
+.prod-img{width:100%;height:160px;object-fit:cover;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:48px;}
+.prod-img img{width:100%;height:160px;object-fit:cover;}
+.prod-body{padding:18px;}
+.prod-name{font-weight:700;font-size:16px;margin-bottom:6px;}
+.prod-desc{color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.5;}
+.prod-footer{display:flex;justify-content:space-between;align-items:center;}
+.prod-prix{font-size:18px;font-weight:700;color:var(--gold);}
+.stock-ok{color:var(--green);font-size:11px;}
+.stock-low{color:var(--red);font-size:11px;}
+.edit-form{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+</style></head><body>
+{{ nav|safe }}
+<div class="page">
+  <div class="page-title">Catalogue — Admin</div>
+  <div class="page-sub">Gérez vos produits · <a href="/shop" style="color:var(--cyan);text-decoration:none;">↗ Voir la page publique client</a></div>
+
+  <!-- AJOUTER PRODUIT -->
+  <div class="card">
+    <div class="card-head">Ajouter un produit</div>
+    {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
+    <form method="POST" action="/produit/ajouter">
+      <div class="grid-input">
+        <input class="field" name="nom" placeholder="Nom du produit" required>
+        <input class="field" name="prix" type="number" placeholder="Prix FCFA" required>
+      </div>
+      <div class="grid-input">
+        <input class="field" name="stock" type="number" placeholder="Stock" value="0">
+        <input class="field" name="image_url" placeholder="URL image (optionnel)">
+      </div>
+      <input class="field" name="description" placeholder="Description courte du produit">
+      <button class="btn btn-cyan" type="submit">+ Ajouter au catalogue</button>
+    </form>
+  </div>
+
+  <!-- GRILLE PRODUITS -->
+  <div class="prod-grid">
+    {% for p in produits %}
+    <div class="prod-card">
+      <div class="prod-img">
+        {% if p[5] %}<img src="{{ p[5] }}" alt="{{ p[1] }}" onerror="this.parentElement.innerHTML='📦'">
+        {% else %}📦{% endif %}
+      </div>
+      <div class="prod-body">
+        <div class="prod-name">{{ p[1] }}</div>
+        <div class="prod-desc">{{ p[4] or "Aucune description" }}</div>
+        <div class="prod-footer">
+          <span class="prod-prix">{{ "{:,}".format(p[2]) }} FCFA</span>
+          {% if p[3] > 5 %}<span class="stock-ok">✓ Stock: {{ p[3] }}</span>
+          {% elif p[3] > 0 %}<span class="stock-low">⚠ Stock faible: {{ p[3] }}</span>
+          {% else %}<span class="stock-low">✕ Rupture</span>{% endif %}
+        </div>
+        <!-- Actions admin -->
+        <div class="edit-form">
+          <div style="display:flex;gap:8px;">
+            <form method="POST" action="/produit/stock/{{ p[0] }}" style="flex:1;display:flex;gap:6px;">
+              <input class="field" name="stock" type="number" value="{{ p[3] }}" style="margin:0;padding:8px;">
+              <button class="btn btn-sm btn-gold" type="submit">Stock</button>
+            </form>
+            <form method="POST" action="/produit/supprimer/{{ p[1] }}">
+              <button class="btn btn-sm btn-red" type="submit">✕</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE</div>
+</body></html>'''
+
+# ─── PAGE PUBLIQUE CLIENT ─────────────────────────────────────────
+SHOP_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Boutique</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--bg:#060D1F;--bg2:#0C1829;--bg3:#111F35;--cyan:#06B6D4;--green:#84CC16;--red:#DC2626;--gold:#F59E0B;--text:#E2E8F0;--muted:#64748B;--border:#1E3A5F;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 30px;display:flex;align-items:center;justify-content:space-between;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand-name{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--cyan);letter-spacing:4px;}
+.brand-tag{font-size:9px;letter-spacing:3px;color:var(--muted);}
+.hero{text-align:center;padding:50px 20px 30px;background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);}
+.hero h1{font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;margin-bottom:10px;}
+.hero h1 span{color:var(--cyan);}
+.hero p{color:var(--muted);font-size:14px;letter-spacing:1px;}
+.badges{display:flex;justify-content:center;gap:16px;margin-top:20px;}
+.hbadge{padding:6px 16px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid;}
+.page{max-width:1100px;margin:0 auto;padding:40px 20px;}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px;}
+.section-sub{color:var(--muted);font-size:13px;margin-bottom:24px;}
+.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:24px;}
+.prod-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:all .25s;cursor:pointer;}
+.prod-card:hover{border-color:var(--cyan);transform:translateY(-4px);}
+.prod-img{width:100%;height:180px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:56px;}
+.prod-img img{width:100%;height:180px;object-fit:cover;}
+.prod-body{padding:20px;}
+.prod-name{font-weight:700;font-size:16px;margin-bottom:6px;}
+.prod-desc{color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6;}
+.prod-prix{font-size:20px;font-weight:700;color:var(--gold);margin-bottom:12px;}
+.stock-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;margin-bottom:14px;}
+.s-ok{background:#84CC1622;color:#84CC16;border:1px solid #84CC1633;}
+.s-low{background:#F59E0B22;color:#F59E0B;border:1px solid #F59E0B33;}
+.s-out{background:#DC262622;color:#DC2626;border:1px solid #DC262633;}
+.btn-cmd{width:100%;padding:12px;background:var(--cyan);color:#000;border:none;border-radius:9px;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:opacity .2s;}
+.btn-cmd:hover{opacity:.85;}
+.btn-cmd:disabled{background:var(--muted);cursor:not-allowed;color:#fff;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:36px;width:400px;max-width:95vw;}
+.modal h3{font-family:'Space Grotesk',sans-serif;font-size:18px;margin-bottom:20px;color:var(--cyan);}
+.field{width:100%;padding:13px 15px;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:9px;font-size:14px;outline:none;}
+.field:focus{border-color:var(--cyan);}
+.modal-btns{display:flex;gap:10px;margin-top:8px;}
+.footer{text-align:center;padding:30px;color:var(--muted);font-size:11px;letter-spacing:3px;border-top:1px solid var(--border);}
+</style></head><body>
+
+<div class="header">
+  <div class="brand">
+    <div style="font-size:28px">🌍</div>
+    <div>
+      <div class="brand-name">AMAN</div>
+      <div class="brand-tag">TRUST · SAFETY · QUALITY</div>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);letter-spacing:2px;">BÉNIN · AFRIQUE</div>
+</div>
+
+<div class="hero">
+  <h1>Bienvenue sur <span>AMAN</span></h1>
+  <p>Tech accessories de qualité — Livraison rapide au Bénin et en Afrique</p>
+  <div class="badges">
+    <span class="hbadge" style="color:#DC2626;border-color:#DC262644;">🔴 TRUST</span>
+    <span class="hbadge" style="color:#84CC16;border-color:#84CC1644;">🟢 SAFETY</span>
+    <span class="hbadge" style="color:#F59E0B;border-color:#F59E0B44;">🟡 QUALITY</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="section-title">Nos produits</div>
+  <div class="section-sub">{{ produits|length }} articles disponibles</div>
+
+  <div class="prod-grid">
+    {% for p in produits %}
+    <div class="prod-card">
+      <div class="prod-img">
+        {% if p[5] %}<img src="{{ p[5] }}" alt="{{ p[1] }}" onerror="this.parentElement.innerHTML='📦'">
+        {% else %}📦{% endif %}
+      </div>
+      <div class="prod-body">
+        <div class="prod-name">{{ p[1] }}</div>
+        <div class="prod-desc">{{ p[4] or "Accessoire tech de qualité premium." }}</div>
+        <div class="prod-prix">{{ "{:,}".format(p[2]) }} FCFA</div>
+        {% if p[3] > 5 %}<span class="stock-badge s-ok">✓ En stock</span>
+        {% elif p[3] > 0 %}<span class="stock-badge s-low">⚠ Stock limité</span>
+        {% else %}<span class="stock-badge s-out">✕ Rupture de stock</span>{% endif %}
+        {% if p[3] > 0 %}
+        <button class="btn-cmd" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}')">Commander</button>
+        {% else %}
+        <button class="btn-cmd" disabled>Indisponible</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- MODAL COMMANDE -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3>📦 Passer une commande</h3>
+    <form method="POST" action="/shop/commander">
+      <input type="hidden" name="produit" id="modal-produit">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--muted);">Produit sélectionné</div>
+        <div style="font-weight:700;font-size:15px;" id="modal-nom"></div>
+        <div style="color:var(--gold);font-weight:700;" id="modal-prix"></div>
+      </div>
+      <input class="field" name="client" placeholder="Votre nom complet" required>
+      <input class="field" name="telephone" placeholder="Votre numéro (+229 01...)" required>
+      <input class="field" name="adresse" placeholder="Votre adresse de livraison">
+      <div class="modal-btns">
+        <button type="button" onclick="closeModal()" style="flex:1;padding:12px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:9px;cursor:pointer;">Annuler</button>
+        <button type="submit" style="flex:2;padding:12px;background:var(--cyan);color:#000;border:none;border-radius:9px;font-weight:700;cursor:pointer;">Confirmer la commande</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE · TRUST · SAFETY · QUALITY</div>
+
+<script>
+function openModal(nom, prix) {
+  document.getElementById('modal-produit').value = nom;
+  document.getElementById('modal-nom').textContent = nom;
+  document.getElementById('modal-prix').textContent = prix + ' FCFA';
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+</script>
+</body></html>'''
+
 @app.route('/catalogue')
 def catalogue():
     if not session.get('ok'): return redirect('/login')
-    return redirect('/?msg=Page catalogue — bientôt disponible')
+    conn = sqlite3.connect(DB)
+    produits = conn.cursor().execute("SELECT * FROM produits ORDER BY id DESC").fetchall()
+    conn.close()
+    msg = request.args.get('msg','')
+    return render_template_string(CATALOGUE_PAGE, css=CSS, nav=nav('cat'),
+        produits=produits, msg=msg)
+
+@app.route('/produit/stock/<int:id>', methods=['POST'])
+def produit_stock(id):
+    if not session.get('ok'): return redirect('/login')
+    stock = int(request.form['stock'])
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute("UPDATE produits SET stock=? WHERE id=?", (stock, id))
+    conn.commit(); conn.close()
+    return redirect('/catalogue?msg=Stock mis à jour ✓')
+
+@app.route('/shop')
+def shop():
+    conn = sqlite3.connect(DB)
+    produits = conn.cursor().execute("SELECT * FROM produits ORDER BY id").fetchall()
+    conn.close()
+    return render_template_string(SHOP_PAGE, produits=produits)
+
+@app.route('/shop/commander', methods=['POST'])
+def shop_commander():
+    client = request.form['client'].strip()
+    telephone = request.form['telephone'].strip()
+    produit = request.form['produit']
+    adresse = request.form.get('adresse','').strip()
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    prix = c.execute("SELECT prix FROM produits WHERE nom=?", (produit,)).fetchone()
+    montant = prix[0] if prix else 0
+    c.execute(
+        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))",
+        (client, telephone, produit, montant, 'en_attente'))
+    conn.commit(); conn.close()
+    return render_template_string('''<!DOCTYPE html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>AMAN — Commande confirmée</title>
+    <style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#060D1F;color:#E2E8F0;font-family:sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+    .box{text-align:center;padding:50px 40px;background:#0C1829;border:1px solid #1E3A5F;border-radius:18px;max-width:400px;}
+    .icon{font-size:60px;margin-bottom:20px;}
+    h2{font-size:22px;margin-bottom:10px;color:#84CC16;}
+    p{color:#64748B;font-size:14px;margin-bottom:6px;}
+    a{display:inline-block;margin-top:24px;padding:12px 28px;background:#06B6D4;color:#000;border-radius:9px;font-weight:700;text-decoration:none;}</style></head><body>
+    <div class="box">
+      <div class="icon">✅</div>
+      <h2>Commande confirmée !</h2>
+      <p>Merci <strong>''' + client + '''</strong></p>
+      <p>Produit : <strong>''' + produit + '''</strong></p>
+      <p>Nous vous contactons au <strong>''' + telephone + '''</strong></p>
+      <p style="margin-top:12px;color:#F59E0B;">TRUST · SAFETY · QUALITY</p>
+      <a href="/shop">← Continuer les achats</a>
+    </div>
+    </body></html>''')
 
 @app.route('/export')
 def export_excel():
