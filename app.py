@@ -24,7 +24,11 @@ def init_db():
     except: pass
     c.execute('''CREATE TABLE IF NOT EXISTS commandes (
         id INTEGER PRIMARY KEY, client TEXT, telephone TEXT,
-        produit TEXT, montant INTEGER, statut TEXT DEFAULT "en_attente", date TEXT)''')
+        produit TEXT, montant INTEGER, statut TEXT DEFAULT "en_attente", date TEXT,
+        numero_suivi TEXT DEFAULT "", transporteur TEXT DEFAULT "", adresse TEXT DEFAULT "")''')
+    for col in ["numero_suivi TEXT DEFAULT ''", "transporteur TEXT DEFAULT ''", "adresse TEXT DEFAULT ''"]:
+        try: c.execute(f"ALTER TABLE commandes ADD COLUMN {col}")
+        except: pass
     c.execute('''CREATE TABLE IF NOT EXISTS fournisseurs (
         id INTEGER PRIMARY KEY, nom TEXT, contact TEXT, pays TEXT, note TEXT)''')
     if c.execute("SELECT COUNT(*) FROM produits").fetchone()[0] == 0:
@@ -196,14 +200,16 @@ NAV = '''<nav class="nav">
   <div class="nav-links">
     <a href="/" class="nav-link {d}">Dashboard</a>
     <a href="/commandes" class="nav-link {c}">Commandes</a>
+    <a href="/livraisons" class="nav-link {li}">Livraisons</a>
     <a href="/fournisseurs" class="nav-link {f}">Fournisseurs</a>
     <a href="/catalogue" class="nav-link {cat}">Catalogue</a>
+    <a href="/stats" class="nav-link {st}">Stats</a>
   </div>
   <a href="/logout" class="nav-logout">Déconnexion</a>
 </nav>'''
 
 def nav(page):
-    pages = {'d':'','c':'','f':'','cat':''}
+    pages = {'d':'','c':'','f':'','cat':'','st':'','li':''}
     pages[page] = 'active'
     return NAV.format(logo=LOGO_SVG, **pages)
 
@@ -592,6 +598,313 @@ def fournisseurs_supprimer(id):
     conn.cursor().execute("DELETE FROM fournisseurs WHERE id=?", (id,))
     conn.commit(); conn.close()
     return redirect('/fournisseurs')
+
+
+# ─── PAGE STATISTIQUES ───────────────────────────────────────────
+STATS_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Statistiques</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>{{ css }}
+.chart-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px;}
+.chart-title{font-size:11px;letter-spacing:3px;color:var(--cyan);text-transform:uppercase;margin-bottom:20px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;}
+.kpi-val{font-size:32px;font-weight:700;margin-bottom:4px;}
+.kpi-lbl{font-size:11px;letter-spacing:2px;color:var(--muted);}
+.top-list{list-style:none;}
+.top-list li{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);}
+.top-list li:last-child{border-bottom:none;}
+</style></head><body>
+{{ nav|safe }}
+<div class="page">
+  <div class="page-title">Statistiques</div>
+  <div class="page-sub">Performance AMAN — {{ today }}</div>
+
+  <!-- KPI TOP -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-val" style="color:var(--gold)">{{ total_fcfa }}</div>
+      <div class="kpi-lbl">FCFA TOTAL</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" style="color:var(--cyan)">{{ nb_ventes }}</div>
+      <div class="kpi-lbl">VENTES</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" style="color:var(--green)">{{ moy_vente }}</div>
+      <div class="kpi-lbl">FCFA MOY/VENTE</div>
+    </div>
+  </div>
+
+  <!-- GRAPHIQUE VENTES PAR JOUR -->
+  <div class="chart-box">
+    <div class="chart-title">Ventes des 7 derniers jours</div>
+    <canvas id="chartJours" height="80"></canvas>
+  </div>
+
+  <!-- GRAPHIQUE PAR PRODUIT -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    <div class="chart-box">
+      <div class="chart-title">Répartition par produit</div>
+      <canvas id="chartProduits" height="200"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Top produits vendus</div>
+      <ul class="top-list">
+        {% for p in top_produits %}
+        <li>
+          <span>{{ p[0] }}</span>
+          <span style="display:flex;gap:12px;">
+            <span class="badge badge-cyan">{{ p[1] }} ventes</span>
+            <span class="badge badge-gold">{{ "{:,}".format(p[2]) }} FCFA</span>
+          </span>
+        </li>
+        {% endfor %}
+        {% if not top_produits %}<li style="color:var(--muted)">Aucune vente encore</li>{% endif %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- COMMANDES PAR STATUT -->
+  <div class="chart-box">
+    <div class="chart-title">Commandes par statut</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;">
+      <div style="text-align:center;padding:16px;background:var(--bg3);border-radius:10px;">
+        <div style="font-size:24px;font-weight:700;color:var(--gold)">{{ cmd_stats.en_attente }}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">EN ATTENTE</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:var(--bg3);border-radius:10px;">
+        <div style="font-size:24px;font-weight:700;color:var(--cyan)">{{ cmd_stats.confirmee }}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">CONFIRMÉES</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:var(--bg3);border-radius:10px;">
+        <div style="font-size:24px;font-weight:700;color:var(--purple)">{{ cmd_stats.en_livraison }}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">EN LIVRAISON</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:var(--bg3);border-radius:10px;">
+        <div style="font-size:24px;font-weight:700;color:var(--green)">{{ cmd_stats.livree }}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">LIVRÉES</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE</div>
+
+<script>
+const joursLabels = {{ jours_labels|safe }};
+const joursData = {{ jours_data|safe }};
+const produitsLabels = {{ produits_labels|safe }};
+const produitsData = {{ produits_data|safe }};
+
+new Chart(document.getElementById("chartJours"), {
+  type: "bar",
+  data: {
+    labels: joursLabels,
+    datasets: [{
+      label: "Ventes (FCFA)",
+      data: joursData,
+      backgroundColor: "#06B6D466",
+      borderColor: "#06B6D4",
+      borderWidth: 2,
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: "#64748B" }, grid: { color: "#1E3A5F" } },
+      y: { ticks: { color: "#64748B" }, grid: { color: "#1E3A5F" } }
+    }
+  }
+});
+
+new Chart(document.getElementById("chartProduits"), {
+  type: "doughnut",
+  data: {
+    labels: produitsLabels,
+    datasets: [{
+      data: produitsData,
+      backgroundColor: ["#06B6D4","#84CC16","#F59E0B","#DC2626","#A855F7","#2563EB"],
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    plugins: { legend: { labels: { color: "#E2E8F0", padding: 16 } } },
+    cutout: "65%"
+  }
+});
+</script>
+</body></html>'''
+
+# ─── PAGE LIVRAISONS ──────────────────────────────────────────────
+LIVRAISONS_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Livraisons</title>
+<style>{{ css }}
+.track-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px;}
+.track-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}
+.track-client{font-weight:700;font-size:15px;}
+.track-produit{color:var(--muted);font-size:13px;margin-top:2px;}
+.track-steps{display:flex;align-items:center;gap:0;margin:16px 0;}
+.step{flex:1;text-align:center;position:relative;}
+.step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto 6px;border:2px solid var(--border);}
+.step-dot.done{background:var(--green);border-color:var(--green);color:#000;}
+.step-dot.active{background:var(--cyan);border-color:var(--cyan);color:#000;}
+.step-dot.pending{background:var(--bg3);color:var(--muted);}
+.step-label{font-size:10px;color:var(--muted);letter-spacing:1px;}
+.step-line{position:absolute;top:13px;left:50%;width:100%;height:2px;background:var(--border);z-index:0;}
+.step-line.done{background:var(--green);}
+.track-info{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;}
+.track-pill{padding:4px 12px;background:var(--bg3);border-radius:20px;font-size:12px;color:var(--muted);}
+.track-pill span{color:var(--text);}
+</style></head><body>
+{{ nav|safe }}
+<div class="page">
+  <div class="page-title">Suivi des livraisons</div>
+  <div class="page-sub">Toutes les commandes en cours de traitement</div>
+
+  {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
+
+  {% for c in commandes %}
+  {% set steps = ["en_attente","confirmee","en_livraison","livree"] %}
+  {% set step_idx = steps.index(c[5]) if c[5] in steps else 0 %}
+  <div class="track-card">
+    <div class="track-header">
+      <div>
+        <div class="track-client">{{ c[1] }} <span style="color:var(--muted);font-weight:400;">· {{ c[2] }}</span></div>
+        <div class="track-produit">{{ c[3] }} — {{ "{:,}".format(c[4]) }} FCFA</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:var(--muted);">#{{ c[0] }}</div>
+        <div style="font-size:11px;color:var(--muted);">{{ c[6] }}</div>
+      </div>
+    </div>
+
+    <!-- BARRE DE PROGRESSION -->
+    <div class="track-steps">
+      {% for i, (emoji, label) in enumerate([("📥","Reçue"),("✅","Confirmée"),("🚚","En route"),("📦","Livrée")]) %}
+      <div class="step">
+        {% if i < step_idx %}<div class="step-line done"></div>{% elif i > 0 %}<div class="step-line"></div>{% endif %}
+        <div class="step-dot {% if i < step_idx %}done{% elif i == step_idx %}active{% else %}pending{% endif %}">{{ emoji }}</div>
+        <div class="step-label">{{ label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- INFOS SUIVI -->
+    <div class="track-info">
+      {% if c[7] %}<div class="track-pill">N° suivi : <span>{{ c[7] }}</span></div>{% endif %}
+      {% if c[8] %}<div class="track-pill">Transporteur : <span>{{ c[8] }}</span></div>{% endif %}
+      {% if c[9] %}<div class="track-pill">Adresse : <span>{{ c[9] }}</span></div>{% endif %}
+    </div>
+
+    <!-- ACTIONS -->
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+      {% if c[5] == "en_attente" %}
+      <form method="POST" action="/commandes/statut/{{ c[0] }}">
+        <input type="hidden" name="statut" value="confirmee">
+        <button class="btn btn-sm btn-cyan" type="submit">✅ Confirmer</button>
+      </form>
+      {% elif c[5] == "confirmee" %}
+      <form method="POST" action="/livraisons/expedition/{{ c[0] }}" style="display:flex;gap:6px;align-items:center;">
+        <input class="field" name="transporteur" placeholder="Transporteur" style="margin:0;padding:8px;width:160px;">
+        <input class="field" name="numero_suivi" placeholder="N° suivi" style="margin:0;padding:8px;width:140px;">
+        <button class="btn btn-sm btn-purple" type="submit">🚚 Expédier</button>
+      </form>
+      {% elif c[5] == "en_livraison" %}
+      <form method="POST" action="/commandes/statut/{{ c[0] }}">
+        <input type="hidden" name="statut" value="livree">
+        <button class="btn btn-sm btn-green" type="submit">📦 Marquer livrée</button>
+      </form>
+      {% elif c[5] == "livree" %}
+      <span style="color:var(--green);font-size:13px;font-weight:600;">✓ Livraison complète</span>
+      {% endif %}
+
+      <!-- WhatsApp direct client -->
+      {% if c[2] %}
+      {% set tel = c[2]|replace(" ","")|replace("+","") %}
+      {% set msg_wa = "Bonjour " + c[1] + ", votre commande AMAN (" + c[3] + ") est " + c[5]|replace("_"," ") + ". Merci de votre confiance !" %}
+      <a href="https://wa.me/{{ tel }}?text={{ msg_wa|urlencode }}" target="_blank">
+        <button class="btn btn-sm btn-green" type="button" style="background:#25D366;">💬 WhatsApp</button>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if not commandes %}
+  <div style="text-align:center;padding:60px;color:var(--muted);">Aucune commande en cours</div>
+  {% endif %}
+</div>
+<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE</div>
+</body></html>'''
+
+@app.route('/stats')
+def stats():
+    if not session.get('ok'): return redirect('/login')
+    from datetime import date, timedelta
+    import json
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    ventes = c.execute("SELECT montant, date FROM ventes").fetchall()
+    total_fcfa = sum(v[0] for v in ventes)
+    nb_ventes = len(ventes)
+    moy_vente = "{:,}".format(total_fcfa // nb_ventes) if nb_ventes else "0"
+    total_fcfa_fmt = "{:,}".format(total_fcfa)
+    # Top produits
+    top_produits = c.execute("""SELECT produit, COUNT(*) as nb, SUM(montant) as total
+        FROM ventes GROUP BY produit ORDER BY nb DESC LIMIT 5""").fetchall()
+    # Stats commandes
+    cmd_stats = {
+        'en_attente': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='en_attente'").fetchone()[0],
+        'confirmee': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='confirmee'").fetchone()[0],
+        'en_livraison': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='en_livraison'").fetchone()[0],
+        'livree': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='livree'").fetchone()[0],
+    }
+    # Ventes 7 derniers jours
+    jours_labels = []
+    jours_data = []
+    for i in range(6, -1, -1):
+        d = (date.today() - timedelta(days=i)).strftime("%Y-%m-%d")
+        label = (date.today() - timedelta(days=i)).strftime("%d/%m")
+        total_j = c.execute("SELECT COALESCE(SUM(montant),0) FROM ventes WHERE date LIKE ?", (d+'%',)).fetchone()[0]
+        jours_labels.append(label)
+        jours_data.append(total_j)
+    # Répartition produits
+    produits_labels = [p[0] for p in top_produits]
+    produits_data = [p[1] for p in top_produits]
+    conn.close()
+    today = date.today().strftime("%d %B %Y")
+    return render_template_string(STATS_PAGE, css=CSS, nav=nav('st'),
+        total_fcfa=total_fcfa_fmt, nb_ventes=nb_ventes, moy_vente=moy_vente,
+        top_produits=top_produits, cmd_stats=cmd_stats, today=today,
+        jours_labels=json.dumps(jours_labels), jours_data=json.dumps(jours_data),
+        produits_labels=json.dumps(produits_labels), produits_data=json.dumps(produits_data))
+
+@app.route('/livraisons')
+def livraisons():
+    if not session.get('ok'): return redirect('/login')
+    conn = sqlite3.connect(DB)
+    commandes = conn.cursor().execute(
+        "SELECT * FROM commandes ORDER BY CASE statut WHEN 'en_livraison' THEN 1 WHEN 'confirmee' THEN 2 WHEN 'en_attente' THEN 3 ELSE 4 END, id DESC"
+    ).fetchall()
+    conn.close()
+    msg = request.args.get('msg','')
+    return render_template_string(LIVRAISONS_PAGE, css=CSS, nav=nav('li'),
+        commandes=commandes, msg=msg)
+
+@app.route('/livraisons/expedition/<int:id>', methods=['POST'])
+def livraisons_expedition(id):
+    if not session.get('ok'): return redirect('/login')
+    transporteur = request.form.get('transporteur','').strip()
+    numero_suivi = request.form.get('numero_suivi','').strip()
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute(
+        "UPDATE commandes SET statut='en_livraison', transporteur=?, numero_suivi=? WHERE id=?",
+        (transporteur, numero_suivi, id))
+    conn.commit(); conn.close()
+    return redirect('/livraisons?msg=Expédition enregistrée ✓')
 
 # ─── CATALOGUE ADMIN ────────────────────────────────────────────
 CATALOGUE_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
