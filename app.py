@@ -986,136 +986,244 @@ CATALOGUE_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
 </body></html>'''
 
 # ─── PAGE PUBLIQUE CLIENT ─────────────────────────────────────────
-SHOP_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+SHOP_PAGE = '''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AMAN — Boutique</title>
+<meta name="description" content="AMAN — Tech accessories de qualité. Livraison rapide au Bénin et en Afrique.">
+<title>AMAN — Boutique en ligne</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
-:root{--bg:#060D1F;--bg2:#0C1829;--bg3:#111F35;--cyan:#06B6D4;--green:#84CC16;--red:#DC2626;--gold:#F59E0B;--text:#E2E8F0;--muted:#64748B;--border:#1E3A5F;}
+:root{--bg:#060D1F;--bg2:#0C1829;--bg3:#111F35;--cyan:#06B6D4;--green:#84CC16;--red:#DC2626;--gold:#F59E0B;--purple:#A855F7;--text:#E2E8F0;--muted:#64748B;--border:#1E3A5F;}
+html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
-.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 30px;display:flex;align-items:center;justify-content:space-between;}
-.brand{display:flex;align-items:center;gap:12px;}
-.brand-name{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--cyan);letter-spacing:4px;}
-.brand-tag{font-size:9px;letter-spacing:3px;color:var(--muted);}
-.hero{text-align:center;padding:50px 20px 30px;background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);}
-.hero h1{font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;margin-bottom:10px;}
+
+/* ── NAV MOBILE ── */
+.nav{position:sticky;top:0;z-index:100;background:rgba(6,13,31,0.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.nav-brand{display:flex;align-items:center;gap:10px;}
+.nav-name{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--cyan);letter-spacing:3px;}
+.nav-tag{font-size:8px;letter-spacing:2px;color:var(--muted);display:block;}
+.nav-cart{background:var(--cyan);color:#000;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;}
+
+/* ── HERO ── */
+.hero{padding:40px 20px 30px;text-align:center;background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);}
+.hero-tag{display:inline-block;padding:4px 14px;background:#06B6D415;border:1px solid #06B6D440;border-radius:20px;font-size:11px;letter-spacing:2px;color:var(--cyan);margin-bottom:16px;}
+.hero h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(24px,6vw,42px);font-weight:700;line-height:1.2;margin-bottom:12px;}
 .hero h1 span{color:var(--cyan);}
-.hero p{color:var(--muted);font-size:14px;letter-spacing:1px;}
-.badges{display:flex;justify-content:center;gap:16px;margin-top:20px;}
-.hbadge{padding:6px 16px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid;}
-.page{max-width:1100px;margin:0 auto;padding:40px 20px;}
-.section-title{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px;}
-.section-sub{color:var(--muted);font-size:13px;margin-bottom:24px;}
-.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:24px;}
-.prod-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:all .25s;cursor:pointer;}
-.prod-card:hover{border-color:var(--cyan);transform:translateY(-4px);}
-.prod-img{width:100%;height:180px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:56px;}
-.prod-img img{width:100%;height:180px;object-fit:cover;}
-.prod-body{padding:20px;}
-.prod-name{font-weight:700;font-size:16px;margin-bottom:6px;}
-.prod-desc{color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6;}
-.prod-prix{font-size:20px;font-weight:700;color:var(--gold);margin-bottom:12px;}
-.stock-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;margin-bottom:14px;}
-.s-ok{background:#84CC1622;color:#84CC16;border:1px solid #84CC1633;}
-.s-low{background:#F59E0B22;color:#F59E0B;border:1px solid #F59E0B33;}
-.s-out{background:#DC262622;color:#DC2626;border:1px solid #DC262633;}
-.btn-cmd{width:100%;padding:12px;background:var(--cyan);color:#000;border:none;border-radius:9px;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:opacity .2s;}
-.btn-cmd:hover{opacity:.85;}
-.btn-cmd:disabled{background:var(--muted);cursor:not-allowed;color:#fff;}
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;}
+.hero p{color:var(--muted);font-size:14px;max-width:400px;margin:0 auto 20px;line-height:1.6;}
+.trust-bar{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;}
+.trust-pill{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid;}
+
+/* ── PROMO BANNER ── */
+.promo{background:linear-gradient(90deg,#F59E0B22,#DC262622);border:1px solid #F59E0B44;border-radius:12px;padding:14px 20px;margin:20px;text-align:center;font-size:13px;font-weight:600;color:var(--gold);}
+
+/* ── FILTRES ── */
+.filters{padding:16px 20px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;}
+.filters::-webkit-scrollbar{display:none;}
+.filter-btn{white-space:nowrap;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;}
+.filter-btn.active{background:var(--cyan);color:#000;border-color:var(--cyan);}
+
+/* ── GRILLE PRODUITS ── */
+.products{padding:0 16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;}
+@media(min-width:600px){.products{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px;padding:0 24px 30px;}}
+@media(min-width:900px){.products{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}}
+
+/* ── CARTE PRODUIT ── */
+.p-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:all .25s;position:relative;}
+.p-card:hover{border-color:var(--cyan);transform:translateY(-3px);}
+.p-card:active{transform:scale(0.98);}
+.p-badge{position:absolute;top:10px;left:10px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;z-index:2;}
+.p-badge.new{background:var(--cyan);color:#000;}
+.p-badge.hot{background:var(--red);color:#fff;}
+.p-img{width:100%;height:140px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:44px;overflow:hidden;}
+.p-img img{width:100%;height:140px;object-fit:cover;}
+@media(min-width:600px){.p-img,.p-img img{height:180px;}}
+.p-body{padding:14px;}
+.p-name{font-weight:700;font-size:14px;margin-bottom:4px;line-height:1.3;}
+@media(min-width:600px){.p-name{font-size:16px;}}
+.p-desc{color:var(--muted);font-size:11px;margin-bottom:10px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.p-prix{font-size:17px;font-weight:700;color:var(--gold);margin-bottom:8px;}
+@media(min-width:600px){.p-prix{font-size:20px;}}
+.p-stock{font-size:10px;margin-bottom:12px;display:flex;align-items:center;gap:4px;}
+.p-stock.ok{color:var(--green);}
+.p-stock.low{color:var(--gold);}
+.p-stock.out{color:var(--red);}
+.btn-order{width:100%;padding:11px;background:var(--cyan);color:#000;border:none;border-radius:9px;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .2s;}
+.btn-order:hover{background:#08d4f0;transform:scale(1.02);}
+.btn-order:disabled{background:var(--muted);color:#999;cursor:not-allowed;transform:none;}
+@media(min-width:600px){.btn-order{font-size:13px;padding:13px;}}
+
+/* ── SECTION CONFIANCE ── */
+.why{padding:30px 20px;border-top:1px solid var(--border);}
+.why h2{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;text-align:center;margin-bottom:20px;}
+.why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.why-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;}
+.why-icon{font-size:28px;margin-bottom:8px;}
+.why-title{font-size:12px;font-weight:700;margin-bottom:4px;}
+.why-text{font-size:11px;color:var(--muted);line-height:1.4;}
+
+/* ── MODAL COMMANDE ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:flex-end;justify-content:center;}
+@media(min-width:600px){.modal-bg{align-items:center;}}
 .modal-bg.open{display:flex;}
-.modal{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:36px;width:400px;max-width:95vw;}
-.modal h3{font-family:'Space Grotesk',sans-serif;font-size:18px;margin-bottom:20px;color:var(--cyan);}
-.field{width:100%;padding:13px 15px;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:9px;font-size:14px;outline:none;}
-.field:focus{border-color:var(--cyan);}
-.modal-btns{display:flex;gap:10px;margin-top:8px;}
-.footer{text-align:center;padding:30px;color:var(--muted);font-size:11px;letter-spacing:3px;border-top:1px solid var(--border);}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:28px 24px;width:100%;max-width:480px;animation:slideUp .3s ease;}
+@media(min-width:600px){.modal{border-radius:20px;}}
+@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px;}
+@media(min-width:600px){.modal-handle{display:none;}}
+.modal-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;margin-bottom:6px;color:var(--cyan);}
+.modal-product-box{background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;}
+.modal-product-name{font-weight:600;font-size:14px;}
+.modal-product-prix{font-weight:700;color:var(--gold);font-size:15px;}
+.mfield{width:100%;padding:14px 16px;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:15px;font-family:'Inter',sans-serif;outline:none;-webkit-appearance:none;}
+.mfield:focus{border-color:var(--cyan);}
+.modal-btns{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:4px;}
+.btn-cancel{padding:14px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:10px;font-size:14px;cursor:pointer;}
+.btn-confirm{padding:14px;background:var(--cyan);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;}
+.btn-confirm:active{opacity:.85;}
+.modal-note{text-align:center;font-size:11px;color:var(--muted);margin-top:12px;}
+
+/* ── FOOTER ── */
+.footer{padding:30px 20px;border-top:1px solid var(--border);text-align:center;}
+.footer-brand{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--cyan);letter-spacing:4px;margin-bottom:6px;}
+.footer-tag{font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:12px;}
+.footer-links{display:flex;justify-content:center;gap:20px;font-size:12px;color:var(--muted);}
 </style></head><body>
 
-<div class="header">
-  <div class="brand">
-    <div style="font-size:28px">🌍</div>
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div style="font-size:24px;">🌍</div>
     <div>
-      <div class="brand-name">AMAN</div>
-      <div class="brand-tag">TRUST · SAFETY · QUALITY</div>
+      <span class="nav-name">AMAN</span>
+      <span class="nav-tag">BÉNIN · AFRIQUE</span>
     </div>
   </div>
-  <div style="font-size:11px;color:var(--muted);letter-spacing:2px;">BÉNIN · AFRIQUE</div>
-</div>
+  <a href="https://wa.me/22901000000?text=Bonjour AMAN, je veux commander" target="_blank" style="text-decoration:none;">
+    <button class="nav-cart">💬 WhatsApp</button>
+  </a>
+</nav>
 
+<!-- HERO -->
 <div class="hero">
-  <h1>Bienvenue sur <span>AMAN</span></h1>
-  <p>Tech accessories de qualité — Livraison rapide au Bénin et en Afrique</p>
-  <div class="badges">
-    <span class="hbadge" style="color:#DC2626;border-color:#DC262644;">🔴 TRUST</span>
-    <span class="hbadge" style="color:#84CC16;border-color:#84CC1644;">🟢 SAFETY</span>
-    <span class="hbadge" style="color:#F59E0B;border-color:#F59E0B44;">🟡 QUALITY</span>
+  <div class="hero-tag">🚀 Livraison rapide au Bénin</div>
+  <h1>Tech accessories<br><span>de qualité premium</span></h1>
+  <p>Commandez en ligne, recevez chez vous. Paiement Mobile Money accepté.</p>
+  <div class="trust-bar">
+    <span class="trust-pill" style="color:#DC2626;border-color:#DC262644;">🔴 TRUST</span>
+    <span class="trust-pill" style="color:#84CC16;border-color:#84CC1644;">🟢 SAFETY</span>
+    <span class="trust-pill" style="color:#F59E0B;border-color:#F59E0B44;">🟡 QUALITY</span>
   </div>
 </div>
 
-<div class="page">
-  <div class="section-title">Nos produits</div>
-  <div class="section-sub">{{ produits|length }} articles disponibles</div>
+<!-- PROMO -->
+<div class="promo">🎁 Livraison gratuite à Cotonou pour toute commande ce mois-ci !</div>
 
-  <div class="prod-grid">
-    {% for p in produits %}
-    <div class="prod-card">
-      <div class="prod-img">
-        {% if p[5] %}<img src="{{ p[5] }}" alt="{{ p[1] }}" onerror="this.parentElement.innerHTML='📦'">
-        {% else %}📦{% endif %}
-      </div>
-      <div class="prod-body">
-        <div class="prod-name">{{ p[1] }}</div>
-        <div class="prod-desc">{{ p[4] or "Accessoire tech de qualité premium." }}</div>
-        <div class="prod-prix">{{ "{:,}".format(p[2]) }} FCFA</div>
-        {% if p[3] > 5 %}<span class="stock-badge s-ok">✓ En stock</span>
-        {% elif p[3] > 0 %}<span class="stock-badge s-low">⚠ Stock limité</span>
-        {% else %}<span class="stock-badge s-out">✕ Rupture de stock</span>{% endif %}
-        {% if p[3] > 0 %}
-        <button class="btn-cmd" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}')">Commander</button>
-        {% else %}
-        <button class="btn-cmd" disabled>Indisponible</button>
-        {% endif %}
-      </div>
+<!-- PRODUITS -->
+<div class="products">
+  {% for p in produits %}
+  <div class="p-card">
+    {% if loop.index <= 2 %}<span class="p-badge new">NOUVEAU</span>{% endif %}
+    <div class="p-img">
+      {% if p[5] %}<img src="{{ p[5] }}" alt="{{ p[1] }}" onerror="this.parentElement.innerHTML='📦'">
+      {% else %}📦{% endif %}
     </div>
-    {% endfor %}
+    <div class="p-body">
+      <div class="p-name">{{ p[1] }}</div>
+      <div class="p-desc">{{ p[4] or "Accessoire tech premium. Qualité garantie." }}</div>
+      <div class="p-prix">{{ "{:,}".format(p[2]) }} FCFA</div>
+      {% if p[3] > 5 %}
+      <div class="p-stock ok">✓ En stock</div>
+      <button class="btn-order" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}','{{ p[2] }}')">Commander maintenant</button>
+      {% elif p[3] > 0 %}
+      <div class="p-stock low">⚠ Plus que {{ p[3] }} en stock !</div>
+      <button class="btn-order" onclick="openModal('{{ p[1] }}','{{ "{:,}".format(p[2]) }}','{{ p[2] }}')">Commander maintenant</button>
+      {% else %}
+      <div class="p-stock out">✕ Rupture de stock</div>
+      <button class="btn-order" disabled>Indisponible</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- POURQUOI AMAN -->
+<div class="why">
+  <h2>Pourquoi choisir AMAN ?</h2>
+  <div class="why-grid">
+    <div class="why-card">
+      <div class="why-icon">🔐</div>
+      <div class="why-title">100% Sécurisé</div>
+      <div class="why-text">Paiement à la livraison ou Mobile Money</div>
+    </div>
+    <div class="why-card">
+      <div class="why-icon">🚀</div>
+      <div class="why-title">Livraison rapide</div>
+      <div class="why-text">Cotonou en 24-48h. Bénin en 2-4 jours</div>
+    </div>
+    <div class="why-card">
+      <div class="why-icon">✅</div>
+      <div class="why-title">Qualité garantie</div>
+      <div class="why-text">Produits vérifiés avant expédition</div>
+    </div>
   </div>
 </div>
 
 <!-- MODAL COMMANDE -->
-<div class="modal-bg" id="modal">
+<div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
-    <h3>📦 Passer une commande</h3>
+    <div class="modal-handle"></div>
+    <div class="modal-title">📦 Votre commande</div>
+    <div class="modal-product-box">
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Produit sélectionné</div>
+        <div class="modal-product-name" id="modal-nom">—</div>
+      </div>
+      <div class="modal-product-prix" id="modal-prix">—</div>
+    </div>
     <form method="POST" action="/shop/commander">
       <input type="hidden" name="produit" id="modal-produit">
-      <div style="background:var(--bg3);border-radius:8px;padding:12px 16px;margin-bottom:16px;">
-        <div style="font-size:13px;color:var(--muted);">Produit sélectionné</div>
-        <div style="font-weight:700;font-size:15px;" id="modal-nom"></div>
-        <div style="color:var(--gold);font-weight:700;" id="modal-prix"></div>
-      </div>
-      <input class="field" name="client" placeholder="Votre nom complet" required>
-      <input class="field" name="telephone" placeholder="Votre numéro (+229 01...)" required>
-      <input class="field" name="adresse" placeholder="Votre adresse de livraison">
+      <input type="hidden" name="montant" id="modal-montant">
+      <input class="mfield" name="client" placeholder="Votre nom complet *" required autocomplete="name">
+      <input class="mfield" name="telephone" placeholder="Numéro téléphone (+229...) *" required type="tel" autocomplete="tel">
+      <input class="mfield" name="adresse" placeholder="Adresse de livraison" autocomplete="street-address">
+      <select class="mfield" name="paiement">
+        <option value="livraison">Paiement à la livraison</option>
+        <option value="mtn">MTN Mobile Money</option>
+        <option value="moov">Moov Money</option>
+      </select>
       <div class="modal-btns">
-        <button type="button" onclick="closeModal()" style="flex:1;padding:12px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:9px;cursor:pointer;">Annuler</button>
-        <button type="submit" style="flex:2;padding:12px;background:var(--cyan);color:#000;border:none;border-radius:9px;font-weight:700;cursor:pointer;">Confirmer la commande</button>
+        <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+        <button type="submit" class="btn-confirm">✓ Confirmer</button>
       </div>
+      <div class="modal-note">🔒 Vos données sont sécurisées · AMAN 2026</div>
     </form>
   </div>
 </div>
 
-<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE · TRUST · SAFETY · QUALITY</div>
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-brand">AMAN</div>
+  <div class="footer-tag">TRUST · SAFETY · QUALITY</div>
+  <div class="footer-links">
+    <span>📍 Cotonou, Bénin</span>
+    <span>💬 WhatsApp</span>
+    <span>🌍 Afrique</span>
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-top:12px;">© 2026 AMAN — Tous droits réservés</div>
+</div>
 
 <script>
-function openModal(nom, prix) {
+function openModal(nom, prix, montant) {
   document.getElementById('modal-produit').value = nom;
+  document.getElementById('modal-montant').value = montant;
   document.getElementById('modal-nom').textContent = nom;
   document.getElementById('modal-prix').textContent = prix + ' FCFA';
   document.getElementById('modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
+  document.body.style.overflow = '';
 }
 </script>
 </body></html>'''
