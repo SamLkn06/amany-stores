@@ -42,7 +42,6 @@ def get_stats():
     conn.close()
     return nb_ventes, total, nb_produits, nb_commandes
 
-# ─── LOGO SVG AMAN ───────────────────────────────────────────────
 LOGO_SVG = '''<svg width="80" height="90" viewBox="0 0 680 480" xmlns="http://www.w3.org/2000/svg">
 <defs>
   <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
@@ -71,27 +70,16 @@ LOGO_SVG = '''<svg width="80" height="90" viewBox="0 0 680 480" xmlns="http://ww
 <rect x="282" y="235" width="116" height="5" rx="2.5" fill="#06B6D4"/>
 </svg>'''
 
-# ─── CSS COMMUN ──────────────────────────────────────────────────
 CSS = '''
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --bg:#060D1F;
-  --bg2:#0C1829;
-  --bg3:#111F35;
-  --cyan:#06B6D4;
-  --green:#84CC16;
-  --red:#DC2626;
-  --gold:#F59E0B;
-  --purple:#A855F7;
-  --blue:#2563EB;
-  --text:#E2E8F0;
-  --muted:#64748B;
-  --border:#1E3A5F;
+  --bg:#060D1F;--bg2:#0C1829;--bg3:#111F35;
+  --cyan:#06B6D4;--green:#84CC16;--red:#DC2626;
+  --gold:#F59E0B;--purple:#A855F7;--blue:#2563EB;
+  --text:#E2E8F0;--muted:#64748B;--border:#1E3A5F;
 }
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
-
-/* NAV */
 .nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 30px;display:flex;align-items:center;justify-content:space-between;height:70px;position:sticky;top:0;z-index:100;}
 .nav-brand{display:flex;align-items:center;gap:12px;}
 .nav-brand-text{display:flex;flex-direction:column;}
@@ -102,13 +90,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .nav-link:hover,.nav-link.active{background:var(--bg3);color:var(--text);}
 .nav-link.active{border-left:3px solid var(--cyan);padding-left:13px;}
 .nav-logout{padding:8px 16px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:13px;cursor:pointer;text-decoration:none;}
-
-/* LAYOUT */
 .page{max-width:1100px;margin:0 auto;padding:30px 20px;}
 .page-title{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;}
 .page-sub{color:var(--muted);font-size:13px;margin-bottom:28px;}
-
-/* STATS */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:30px;}
 .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px;position:relative;overflow:hidden;}
 .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
@@ -123,69 +107,81 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .stat-val.green{color:var(--green);}
 .stat-val.purple{color:var(--purple);}
 .stat-lbl{font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;}
-
-/* GRID 2 COL */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
-
-/* CARDS */
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px;margin-bottom:20px;}
 .card-head{font-size:11px;letter-spacing:3px;color:var(--cyan);text-transform:uppercase;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border);}
-
-/* FORMS */
 .field{width:100%;padding:13px 15px;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:9px;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border .2s;}
 .field:focus{border-color:var(--cyan);}
 .grid-input{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-
-/* BUTTONS */
+.grid-input3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .btn{width:100%;padding:13px;border:none;border-radius:9px;font-size:13px;font-weight:600;letter-spacing:1px;cursor:pointer;text-transform:uppercase;transition:opacity .2s;}
 .btn:hover{opacity:.85;}
 .btn-red{background:var(--red);color:#fff;}
 .btn-cyan{background:var(--cyan);color:#000;}
 .btn-gold{background:var(--gold);color:#000;}
 .btn-green{background:var(--green);color:#000;}
+.btn-purple{background:var(--purple);color:#fff;}
 .btn-sm{width:auto;padding:6px 14px;font-size:11px;}
-
-/* TABLE */
 .table-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;}
 th{background:var(--bg3);color:var(--muted);padding:12px 14px;font-size:11px;letter-spacing:2px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--border);}
 td{padding:13px 14px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:var(--bg3);}
-
-/* BADGES */
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
 .badge-green{background:#84CC1622;color:var(--green);border:1px solid #84CC1633;}
 .badge-gold{background:#F59E0B22;color:var(--gold);border:1px solid #F59E0B33;}
 .badge-red{background:#DC262622;color:var(--red);border:1px solid #DC262633;}
-
-/* TOTAL */
+.badge-cyan{background:#06B6D422;color:var(--cyan);border:1px solid #06B6D433;}
+.badge-purple{background:#A855F722;color:var(--purple);border:1px solid #A855F733;}
 .total-bar{background:var(--bg3);border:1px solid var(--gold);border-radius:10px;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;margin-top:16px;}
 .total-bar span:first-child{font-size:12px;letter-spacing:2px;color:var(--muted);}
 .total-bar span:last-child{font-size:22px;font-weight:700;color:var(--gold);}
-
-/* ALERT */
 .alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;}
 .alert-success{background:#84CC1615;border:1px solid #84CC1640;color:var(--green);}
-
-/* LOGIN */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
 .login-box{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:48px 40px;width:340px;text-align:center;}
 .login-name{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--cyan);letter-spacing:6px;margin:16px 0 4px;}
 .login-tag{font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:32px;}
 .login-error{color:var(--red);font-size:13px;margin-bottom:14px;}
-
-/* FOOTER */
+.pipeline{display:flex;gap:0;margin-bottom:24px;}
+.pipe-step{flex:1;padding:12px 8px;text-align:center;font-size:11px;letter-spacing:1px;font-weight:600;border:1px solid var(--border);cursor:pointer;transition:all .2s;}
+.pipe-step:first-child{border-radius:9px 0 0 9px;}
+.pipe-step:last-child{border-radius:0 9px 9px 0;}
+.pipe-step.active-en_attente{background:#F59E0B22;color:var(--gold);border-color:var(--gold);}
+.pipe-step.active-confirmee{background:#06B6D422;color:var(--cyan);border-color:var(--cyan);}
+.pipe-step.active-en_livraison{background:#A855F722;color:var(--purple);border-color:var(--purple);}
+.pipe-step.active-livree{background:#84CC1622;color:var(--green);border-color:var(--green);}
 .footer{text-align:center;padding:30px;color:var(--muted);font-size:11px;letter-spacing:3px;}
 '''
 
-# ─── TEMPLATES ───────────────────────────────────────────────────
+NAV = '''<nav class="nav">
+  <div class="nav-brand">
+    {logo}
+    <div class="nav-brand-text">
+      <span class="nav-brand-name">AMAN</span>
+      <span class="nav-brand-tag">TRUST · SAFETY · QUALITY</span>
+    </div>
+  </div>
+  <div class="nav-links">
+    <a href="/" class="nav-link {d}">Dashboard</a>
+    <a href="/commandes" class="nav-link {c}">Commandes</a>
+    <a href="/fournisseurs" class="nav-link {f}">Fournisseurs</a>
+    <a href="/catalogue" class="nav-link {cat}">Catalogue</a>
+  </div>
+  <a href="/logout" class="nav-logout">Déconnexion</a>
+</nav>'''
+
+def nav(page):
+    pages = {'d':'','c':'','f':'','cat':''}
+    pages[page] = 'active'
+    return NAV.format(logo=LOGO_SVG, **pages)
+
 LOGIN = '''<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AMAN — Connexion</title>
 <style>{{ css }}</style></head><body>
-<div class="login-wrap">
-<div class="login-box">
+<div class="login-wrap"><div class="login-box">
   {{ logo|safe }}
   <div class="login-name">AMAN</div>
   <div class="login-tag">TRUST · SAFETY · QUALITY</div>
@@ -195,63 +191,23 @@ LOGIN = '''<!DOCTYPE html><html><head><meta charset="utf-8">
     <button class="btn btn-cyan" type="submit">Connexion</button>
   </form>
   <div style="margin-top:20px;font-size:10px;letter-spacing:2px;color:var(--muted)">BÉNIN · AFRIQUE</div>
-</div>
-</div>
-</body></html>'''
+</div></div></body></html>'''
 
 DASHBOARD = '''<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AMAN — Dashboard</title>
 <style>{{ css }}</style></head><body>
-
-<nav class="nav">
-  <div class="nav-brand">
-    {{ logo|safe }}
-    <div class="nav-brand-text">
-      <span class="nav-brand-name">AMAN</span>
-      <span class="nav-brand-tag">TRUST · SAFETY · QUALITY</span>
-    </div>
-  </div>
-  <div class="nav-links">
-    <a href="/" class="nav-link active">Dashboard</a>
-    <a href="/commandes" class="nav-link">Commandes</a>
-    <a href="/fournisseurs" class="nav-link">Fournisseurs</a>
-    <a href="/catalogue" class="nav-link">Catalogue</a>
-  </div>
-  <a href="/logout" class="nav-logout">Déconnexion</a>
-</nav>
-
+{{ nav|safe }}
 <div class="page">
   <div class="page-title">Dashboard</div>
   <div class="page-sub">Vue d'ensemble — {{ today }}</div>
-
-  <!-- STATS -->
   <div class="stats-grid">
-    <div class="stat-card cyan">
-      <div class="stat-icon">📦</div>
-      <div class="stat-val cyan">{{ nb_ventes }}</div>
-      <div class="stat-lbl">Ventes totales</div>
-    </div>
-    <div class="stat-card gold">
-      <div class="stat-icon">💰</div>
-      <div class="stat-val gold">{{ "{:,}".format(total) }}</div>
-      <div class="stat-lbl">FCFA encaissés</div>
-    </div>
-    <div class="stat-card green">
-      <div class="stat-icon">🛒</div>
-      <div class="stat-val green">{{ nb_produits }}</div>
-      <div class="stat-lbl">Produits actifs</div>
-    </div>
-    <div class="stat-card purple">
-      <div class="stat-icon">⏳</div>
-      <div class="stat-val purple">{{ nb_commandes }}</div>
-      <div class="stat-lbl">Commandes en attente</div>
-    </div>
+    <div class="stat-card cyan"><div class="stat-icon">📦</div><div class="stat-val cyan">{{ nb_ventes }}</div><div class="stat-lbl">Ventes totales</div></div>
+    <div class="stat-card gold"><div class="stat-icon">💰</div><div class="stat-val gold">{{ "{:,}".format(total) }}</div><div class="stat-lbl">FCFA encaissés</div></div>
+    <div class="stat-card green"><div class="stat-icon">🛒</div><div class="stat-val green">{{ nb_produits }}</div><div class="stat-lbl">Produits actifs</div></div>
+    <div class="stat-card purple"><div class="stat-icon">⏳</div><div class="stat-val purple">{{ nb_commandes }}</div><div class="stat-lbl">Commandes en attente</div></div>
   </div>
-
-  <!-- NOUVELLE VENTE + PRODUITS -->
   <div class="grid2">
-
     <div class="card">
       <div class="card-head">Nouvelle vente</div>
       {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
@@ -265,7 +221,6 @@ DASHBOARD = '''<!DOCTYPE html><html><head><meta charset="utf-8">
         <button class="btn btn-red" type="submit">Enregistrer la vente</button>
       </form>
     </div>
-
     <div class="card">
       <div class="card-head">Ajouter un produit</div>
       <form method="POST" action="/produit/ajouter">
@@ -278,62 +233,177 @@ DASHBOARD = '''<!DOCTYPE html><html><head><meta charset="utf-8">
       </form>
     </div>
   </div>
-
-  <!-- CATALOGUE RÉSUMÉ -->
   <div class="card">
     <div class="card-head">Produits en catalogue</div>
-    <div class="table-wrap">
-    <table>
+    <div class="table-wrap"><table>
       <tr><th>Produit</th><th>Prix</th><th>Action</th></tr>
       {% for p, prix in produits.items() %}
       <tr>
         <td>{{ p }}</td>
         <td><span class="badge badge-gold">{{ "{:,}".format(prix) }} FCFA</span></td>
-        <td>
-          <form method="POST" action="/produit/supprimer/{{ p }}" style="display:inline">
-            <button class="btn btn-sm btn-red" type="submit">Supprimer</button>
-          </form>
-        </td>
+        <td><form method="POST" action="/produit/supprimer/{{ p }}" style="display:inline">
+          <button class="btn btn-sm btn-red" type="submit">Supprimer</button>
+        </form></td>
       </tr>
       {% endfor %}
-    </table>
-    </div>
+    </table></div>
   </div>
-
-  <!-- HISTORIQUE VENTES -->
   <div class="card">
     <div class="card-head">Historique des ventes</div>
     <a href="/export" style="text-decoration:none">
-      <button class="btn btn-gold" style="width:auto;padding:10px 22px;margin-bottom:18px">
-        ⬇ Télécharger Excel
-      </button>
+      <button class="btn btn-gold" style="width:auto;padding:10px 22px;margin-bottom:18px">⬇ Télécharger Excel</button>
     </a>
-    <div class="table-wrap">
-    <table>
+    <div class="table-wrap"><table>
       <tr><th>#</th><th>Produit</th><th>Montant</th><th>Téléphone</th><th>Date</th><th>Statut</th><th>Action</th></tr>
       {% for v in ventes %}
       <tr>
-        <td>{{ v[0] }}</td>
-        <td>{{ v[1] }}</td>
+        <td>{{ v[0] }}</td><td>{{ v[1] }}</td>
         <td>{{ "{:,}".format(v[2]) }} FCFA</td>
-        <td>{{ v[3] }}</td>
-        <td>{{ v[4] }}</td>
+        <td>{{ v[3] }}</td><td>{{ v[4] }}</td>
         <td><span class="badge badge-green">Livrée</span></td>
+        <td><form method="POST" action="/supprimer/{{ v[0] }}" style="display:inline">
+          <button class="btn btn-sm btn-red" type="submit">✕</button>
+        </form></td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    <div class="total-bar"><span>TOTAL GÉNÉRAL</span><span>{{ "{:,}".format(total) }} FCFA</span></div>
+  </div>
+</div>
+<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE</div>
+</body></html>'''
+
+COMMANDES_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Commandes</title>
+<style>{{ css }}</style></head><body>
+{{ nav|safe }}
+<div class="page">
+  <div class="page-title">Commandes</div>
+  <div class="page-sub">Suivi complet — réception → confirmation → livraison</div>
+
+  <!-- PIPELINE VISUEL -->
+  <div class="pipeline">
+    <div class="pipe-step active-en_attente">⏳ En attente ({{ stats.en_attente }})</div>
+    <div class="pipe-step active-confirmee">✅ Confirmées ({{ stats.confirmee }})</div>
+    <div class="pipe-step active-en_livraison">🚚 En livraison ({{ stats.en_livraison }})</div>
+    <div class="pipe-step active-livree">📦 Livrées ({{ stats.livree }})</div>
+  </div>
+
+  <!-- NOUVELLE COMMANDE -->
+  <div class="card">
+    <div class="card-head">Nouvelle commande client</div>
+    {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
+    <form method="POST" action="/commandes/ajouter">
+      <div class="grid-input3">
+        <input class="field" name="client" placeholder="Nom du client" required>
+        <input class="field" name="telephone" placeholder="Téléphone (+229...)" required>
+        <select class="field" name="produit">
+          {% for p, prix in produits.items() %}
+          <option value="{{ p }}|{{ prix }}">{{ p }} — {{ "{:,}".format(prix) }} FCFA</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-green" type="submit">+ Enregistrer la commande</button>
+    </form>
+  </div>
+
+  <!-- LISTE COMMANDES -->
+  <div class="card">
+    <div class="card-head">Toutes les commandes</div>
+    <div class="table-wrap"><table>
+      <tr><th>#</th><th>Client</th><th>Téléphone</th><th>Produit</th><th>Montant</th><th>Date</th><th>Statut</th><th>Action</th></tr>
+      {% for c in commandes %}
+      <tr>
+        <td>{{ c[0] }}</td>
+        <td><strong>{{ c[1] }}</strong></td>
+        <td>{{ c[2] }}</td>
+        <td>{{ c[3] }}</td>
+        <td>{{ "{:,}".format(c[4]) }} FCFA</td>
+        <td>{{ c[6] }}</td>
         <td>
-          <form method="POST" action="/supprimer/{{ v[0] }}" style="display:inline">
+          {% if c[5] == "en_attente" %}<span class="badge badge-gold">⏳ En attente</span>
+          {% elif c[5] == "confirmee" %}<span class="badge badge-cyan">✅ Confirmée</span>
+          {% elif c[5] == "en_livraison" %}<span class="badge badge-purple">🚚 En livraison</span>
+          {% elif c[5] == "livree" %}<span class="badge badge-green">📦 Livrée</span>
+          {% endif %}
+        </td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          {% if c[5] == "en_attente" %}
+          <form method="POST" action="/commandes/statut/{{ c[0] }}">
+            <input type="hidden" name="statut" value="confirmee">
+            <button class="btn btn-sm btn-cyan" type="submit">Confirmer</button>
+          </form>
+          {% elif c[5] == "confirmee" %}
+          <form method="POST" action="/commandes/statut/{{ c[0] }}">
+            <input type="hidden" name="statut" value="en_livraison">
+            <button class="btn btn-sm btn-purple" type="submit">Expédier</button>
+          </form>
+          {% elif c[5] == "en_livraison" %}
+          <form method="POST" action="/commandes/statut/{{ c[0] }}">
+            <input type="hidden" name="statut" value="livree">
+            <button class="btn btn-sm btn-green" type="submit">Livrée ✓</button>
+          </form>
+          {% endif %}
+          <form method="POST" action="/commandes/supprimer/{{ c[0] }}">
             <button class="btn btn-sm btn-red" type="submit">✕</button>
           </form>
         </td>
       </tr>
       {% endfor %}
-    </table>
-    </div>
-    <div class="total-bar">
-      <span>TOTAL GÉNÉRAL</span>
-      <span>{{ "{:,}".format(total) }} FCFA</span>
-    </div>
+      {% if not commandes %}
+      <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px;">Aucune commande pour l'instant</td></tr>
+      {% endif %}
+    </table></div>
   </div>
+</div>
+<div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE</div>
+</body></html>'''
 
+FOURNISSEURS_PAGE = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Fournisseurs</title>
+<style>{{ css }}</style></head><body>
+{{ nav|safe }}
+<div class="page">
+  <div class="page-title">Fournisseurs</div>
+  <div class="page-sub">Gestion de vos contacts fournisseurs</div>
+  <div class="card">
+    <div class="card-head">Ajouter un fournisseur</div>
+    {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
+    <form method="POST" action="/fournisseurs/ajouter">
+      <div class="grid-input">
+        <input class="field" name="nom" placeholder="Nom / Entreprise" required>
+        <input class="field" name="contact" placeholder="WeChat / WhatsApp / Tél">
+      </div>
+      <div class="grid-input">
+        <input class="field" name="pays" placeholder="Pays (ex: Chine, Bénin...)">
+        <input class="field" name="note" placeholder="Note (produits, conditions...)">
+      </div>
+      <button class="btn btn-cyan" type="submit">+ Ajouter le fournisseur</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-head">Mes fournisseurs ({{ fournisseurs|length }})</div>
+    <div class="table-wrap"><table>
+      <tr><th>#</th><th>Nom</th><th>Contact</th><th>Pays</th><th>Note</th><th>Action</th></tr>
+      {% for f in fournisseurs %}
+      <tr>
+        <td>{{ f[0] }}</td>
+        <td><strong>{{ f[1] }}</strong></td>
+        <td><span class="badge badge-cyan">{{ f[2] }}</span></td>
+        <td>{{ f[3] }}</td>
+        <td style="color:var(--muted)">{{ f[4] }}</td>
+        <td><form method="POST" action="/fournisseurs/supprimer/{{ f[0] }}">
+          <button class="btn btn-sm btn-red" type="submit">✕</button>
+        </form></td>
+      </tr>
+      {% endfor %}
+      {% if not fournisseurs %}
+      <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px;">Aucun fournisseur enregistré</td></tr>
+      {% endif %}
+    </table></div>
+  </div>
 </div>
 <div class="footer">© 2026 AMAN — COTONOU, BÉNIN · AFRIQUE</div>
 </body></html>'''
@@ -350,8 +420,7 @@ def login():
 
 @app.route('/logout')
 def logout():
-    session.clear()
-    return redirect('/login')
+    session.clear(); return redirect('/login')
 
 @app.route('/')
 def accueil():
@@ -364,7 +433,7 @@ def accueil():
     from datetime import date
     today = date.today().strftime("%d %B %Y")
     msg = request.args.get('msg','')
-    return render_template_string(DASHBOARD, css=CSS, logo=LOGO_SVG,
+    return render_template_string(DASHBOARD, css=CSS, nav=nav('d'),
         ventes=ventes, produits=get_produits(), total=total,
         nb_ventes=nb_ventes, nb_produits=nb_produits, nb_commandes=nb_commandes,
         today=today, msg=msg)
@@ -409,15 +478,87 @@ def produit_supprimer(nom):
     conn.commit(); conn.close()
     return redirect('/?msg=Produit supprimé')
 
+# ─── COMMANDES ───────────────────────────────────────────────────
 @app.route('/commandes')
 def commandes():
     if not session.get('ok'): return redirect('/login')
-    return redirect('/?msg=Page commandes — bientôt disponible')
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    all_cmd = c.execute("SELECT * FROM commandes ORDER BY id DESC").fetchall()
+    stats = {
+        'en_attente': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='en_attente'").fetchone()[0],
+        'confirmee':  c.execute("SELECT COUNT(*) FROM commandes WHERE statut='confirmee'").fetchone()[0],
+        'en_livraison': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='en_livraison'").fetchone()[0],
+        'livree': c.execute("SELECT COUNT(*) FROM commandes WHERE statut='livree'").fetchone()[0],
+    }
+    conn.close()
+    msg = request.args.get('msg','')
+    return render_template_string(COMMANDES_PAGE, css=CSS, nav=nav('c'),
+        commandes=all_cmd, produits=get_produits(), stats=stats, msg=msg)
 
+@app.route('/commandes/ajouter', methods=['POST'])
+def commandes_ajouter():
+    if not session.get('ok'): return redirect('/login')
+    client = request.form['client'].strip()
+    telephone = request.form['telephone'].strip()
+    produit_prix = request.form['produit'].split('|')
+    produit = produit_prix[0]
+    montant = int(produit_prix[1]) if len(produit_prix) > 1 else 0
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute(
+        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))",
+        (client, telephone, produit, montant, 'en_attente'))
+    conn.commit(); conn.close()
+    return redirect('/commandes?msg=Commande enregistrée ✓')
+
+@app.route('/commandes/statut/<int:id>', methods=['POST'])
+def commandes_statut(id):
+    if not session.get('ok'): return redirect('/login')
+    statut = request.form['statut']
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute("UPDATE commandes SET statut=? WHERE id=?", (statut, id))
+    conn.commit(); conn.close()
+    return redirect('/commandes?msg=Statut mis à jour ✓')
+
+@app.route('/commandes/supprimer/<int:id>', methods=['POST'])
+def commandes_supprimer(id):
+    if not session.get('ok'): return redirect('/login')
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute("DELETE FROM commandes WHERE id=?", (id,))
+    conn.commit(); conn.close()
+    return redirect('/commandes')
+
+# ─── FOURNISSEURS ────────────────────────────────────────────────
 @app.route('/fournisseurs')
 def fournisseurs():
     if not session.get('ok'): return redirect('/login')
-    return redirect('/?msg=Page fournisseurs — bientôt disponible')
+    conn = sqlite3.connect(DB)
+    all_f = conn.cursor().execute("SELECT * FROM fournisseurs ORDER BY id DESC").fetchall()
+    conn.close()
+    msg = request.args.get('msg','')
+    return render_template_string(FOURNISSEURS_PAGE, css=CSS, nav=nav('f'),
+        fournisseurs=all_f, msg=msg)
+
+@app.route('/fournisseurs/ajouter', methods=['POST'])
+def fournisseurs_ajouter():
+    if not session.get('ok'): return redirect('/login')
+    nom = request.form['nom'].strip()
+    contact = request.form.get('contact','').strip()
+    pays = request.form.get('pays','').strip()
+    note = request.form.get('note','').strip()
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)",
+        (nom, contact, pays, note))
+    conn.commit(); conn.close()
+    return redirect('/fournisseurs?msg=Fournisseur ajouté ✓')
+
+@app.route('/fournisseurs/supprimer/<int:id>', methods=['POST'])
+def fournisseurs_supprimer(id):
+    if not session.get('ok'): return redirect('/login')
+    conn = sqlite3.connect(DB)
+    conn.cursor().execute("DELETE FROM fournisseurs WHERE id=?", (id,))
+    conn.commit(); conn.close()
+    return redirect('/fournisseurs')
 
 @app.route('/catalogue')
 def catalogue():
@@ -431,12 +572,10 @@ def export_excel():
     ventes = conn.cursor().execute("SELECT * FROM ventes").fetchall()
     conn.close()
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Ventes AMAN"
+    ws = wb.active; ws.title = "Ventes AMAN"
     ws.append(["ID","Produit","Montant (FCFA)","Telephone","Date"])
     for v in ventes: ws.append(list(v))
-    ws.append([])
-    ws.append(["","TOTAL",sum(v[2] for v in ventes),"",""])
+    ws.append([]); ws.append(["","TOTAL",sum(v[2] for v in ventes),"",""])
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 20
     output = io.BytesIO()
