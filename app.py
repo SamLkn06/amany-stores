@@ -23,6 +23,28 @@ def init_db():
         for nom, prix in [("Tripod", 15000), ("Microphone", 25000),
                           ("Ring Light", 18000), ("Gimbal", 45000)]:
             c.execute("INSERT INTO produits (nom, prix, stock) VALUES (?,?,?)", (nom, prix, 10))
+    if c.execute("SELECT COUNT(*) FROM fournisseurs").fetchone()[0] == 0:
+        fournisseurs = [
+            ("Guangdong Axin Logistics","axinlogistics.com | WeChat: axin_logistics","Chine 🇨🇳","Livraison Afrique 15-25j | Réactivité ≤1h | Taux livraison >95%"),
+            ("Shenzhen Fly International","flyinternational.cn | WhatsApp pro","Chine 🇨🇳","Stabilité élevée | Idéal B2B | 830K$+ revenus"),
+            ("WUHAN BOSA SHIPPING","bosashipping.com","Chine 🇨🇳","Commandes volumineuses | Fret maritime | 1.3M$+ revenus"),
+            ("AliExpress / 1688.com","aliexpress.com | 1688.com","Chine 🇨🇳","Sourcing général | Tech accessories | Livraison 20-35j"),
+            ("Chadrack Jack","WhatsApp/WeChat — contact direct","Chine 🇨🇳","Tech accessories | Contact établi | Négociation directe"),
+            ("DHL Express Bénin","+229 21 30 10 85 | dhl.com/bj-fr","International 🌍","Express porte-à-porte | Suivi temps réel | Aérien prioritaire"),
+            ("Bolloré Logistics Cotonou","+229 21 36 83 00 | bollore-logistics.com","International 🌍","Zone Portuaire Cotonou | Fret maritime & aérien"),
+            ("OMA Group Bénin","+229 21 31 52 88 | benin.omagroup.com","International 🌍","Rue du Gouverneur Fourn Cotonou | Import/export"),
+            ("IFS — International Freight","contact@ifs-benin.com","International 🌍","Fret aérien, maritime, terrestre | Rapide & sécurisé"),
+            ("CEVA Logistics Cotonou","+228 31 21 52 88 | cevalogistics.com","International 🌍","Réseau mondial | Supply chain | Partenaire fiable"),
+            ("Laly Express Cotonou","Ganhi Place de la Poste | Cotonou","Bénin 🇧🇯","Livraison express locale | Colis & courriers | Depuis 2018"),
+            ("Express Relais Logistique","DC Services Bénin","Bénin 🇧🇯","Livraison locale & villes africaines | E-solutions"),
+            ("Africa Cargo Hub","africacargohub.bj","Bénin 🇧🇯","Warehousing + shipping + livraison | Dropshipping Bénin"),
+            ("GROUPE OROS","Cotonou — transit & dédouanement","Bénin 🇧🇯","Transit, dédouanement, livraison porte-à-porte"),
+            ("Grimaldi Lines Cotonou","+229 21 31 67 28 | grimaldi@grimaldi-benin.com","Bénin 🇧🇯","Fret maritime | Ligne Europe-Afrique de l Ouest"),
+            ("eWorldTrade","eworldtrade.com","Plateforme B2B 🌐","Fournisseurs vérifiés | Livraison Bénin | Paiement sécurisé"),
+            ("Zendrop","zendrop.com | App Shopify","Plateforme B2B 🌐","Produits Chine | Livraison mondiale | Compatible Shopify"),
+            ("Banggood","banggood.com","Chine/Europe 🌐","Tech & électronique | Livraison Afrique | Prix compétitifs"),
+        ]
+        c.executemany("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)", fournisseurs)
     conn.commit()
     conn.close()
 
