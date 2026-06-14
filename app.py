@@ -492,7 +492,7 @@ def vendre():
     montant = get_produits().get(produit, 0)
     conn = get_conn()
     conn.cursor().execute(
-        "INSERT INTO ventes (produit,montant,telephone,date) VALUES (?,?,?," + ("NOW()" if DATABASE_URL else "datetime('now','localtime')") + ")",
+        ("INSERT INTO ventes (produit,montant,telephone,date) VALUES (%s,%s,%s,NOW())" if DATABASE_URL else "INSERT INTO ventes (produit,montant,telephone,date) VALUES (?,?,?,datetime('now','localtime'))"),
         (produit, montant, telephone))
     conn.commit(); conn.close()
     return redirect('/?msg=Vente enregistrée ✓')
@@ -555,7 +555,7 @@ def commandes_ajouter():
     montant = int(produit_prix[1]) if len(produit_prix) > 1 else 0
     conn = get_conn()
     conn.cursor().execute(
-        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?," + ("NOW()" if DATABASE_URL else "datetime('now','localtime')") + ")",
+        ("INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (%s,%s,%s,%s,%s,NOW())" if DATABASE_URL else "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))"),
         (client, telephone, produit, montant, 'en_attente'))
     conn.commit(); conn.close()
     return redirect('/commandes?msg=Commande enregistrée ✓')
@@ -1656,7 +1656,7 @@ def shop_commander():
     prix = c.execute("SELECT prix FROM produits WHERE nom=?", (produit,)).fetchone()
     montant = prix[0] if prix else 0
     c.execute(
-        "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?," + ("NOW()" if DATABASE_URL else "datetime('now','localtime')") + ")",
+        ("INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (%s,%s,%s,%s,%s,NOW())" if DATABASE_URL else "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))"),
         (client, telephone, produit, montant, 'en_attente'))
     conn.commit(); conn.close()
     return render_template_string('''<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -1678,6 +1678,211 @@ def shop_commander():
       <a href="/shop">← Continuer les achats</a>
     </div>
     </body></html>''')
+
+
+# ─── PAGE SUIVI COMMANDE PUBLIC ──────────────────────────────────
+SUIVI_PAGE = '''<!DOCTYPE html><html lang="fr"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMAN — Suivi de commande</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--bg:#F8F9FC;--white:#fff;--dark:#060D1F;--cyan:#06B6D4;--green:#16A34A;--gold:#D97706;--red:#DC2626;--purple:#7C3AED;--text:#111827;--muted:#6B7280;--border:#E5E7EB;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.nav{background:var(--white);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+.nav-brand{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:800;color:var(--dark);letter-spacing:2px;text-decoration:none;}
+.nav-brand span{color:var(--cyan);}
+.nav-back{font-size:13px;color:var(--cyan);text-decoration:none;font-weight:600;}
+.page{max-width:640px;margin:0 auto;padding:40px 20px;}
+.page-title{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:800;margin-bottom:6px;}
+.page-sub{color:var(--muted);font-size:14px;margin-bottom:32px;}
+.search-box{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:28px;margin-bottom:28px;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+.search-label{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:block;}
+.search-row{display:flex;gap:10px;}
+.search-input{flex:1;padding:13px 16px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;outline:none;transition:border .2s;font-family:'Inter',sans-serif;}
+.search-input:focus{border-color:var(--cyan);}
+.search-btn{background:var(--dark);color:white;border:none;border-radius:10px;padding:13px 22px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .2s;}
+.search-btn:hover{background:var(--cyan);color:#000;}
+
+/* Résultat */
+.result-box{background:var(--white);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+.result-header{background:var(--dark);color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;}
+.result-id{font-size:12px;letter-spacing:2px;color:#64748B;}
+.result-date{font-size:12px;color:#64748B;}
+.result-body{padding:24px;}
+.result-product{font-size:18px;font-weight:700;margin-bottom:4px;}
+.result-client{font-size:14px;color:var(--muted);margin-bottom:20px;}
+.result-montant{display:inline-block;padding:4px 12px;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:20px;font-size:13px;font-weight:700;color:var(--gold);margin-bottom:24px;}
+
+/* Pipeline visuel */
+.pipeline{margin-bottom:28px;}
+.pipe-steps{display:flex;align-items:center;position:relative;}
+.pipe-line{position:absolute;top:18px;left:18px;right:18px;height:2px;background:var(--border);z-index:0;}
+.pipe-line-fill{position:absolute;top:18px;left:18px;height:2px;background:linear-gradient(90deg,var(--cyan),var(--green));z-index:1;transition:width .5s ease;}
+.pipe-step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;z-index:2;}
+.pipe-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:8px;border:2px solid var(--border);background:var(--bg);transition:all .3s;}
+.pipe-dot.done{background:var(--green);border-color:var(--green);color:white;}
+.pipe-dot.active{background:var(--cyan);border-color:var(--cyan);color:white;box-shadow:0 0 0 4px rgba(6,182,212,0.2);}
+.pipe-dot.pending{background:var(--white);color:var(--muted);}
+.pipe-label{font-size:11px;font-weight:600;color:var(--muted);text-align:center;line-height:1.3;}
+.pipe-label.active{color:var(--cyan);}
+.pipe-label.done{color:var(--green);}
+
+/* Infos livraison */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.info-card{background:var(--bg);border-radius:10px;padding:14px;}
+.info-label{font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+.info-value{font-size:14px;font-weight:600;color:var(--text);}
+.info-value.empty{color:var(--muted);font-weight:400;font-style:italic;}
+
+/* Message statut */
+.status-msg{border-radius:10px;padding:16px 20px;margin-bottom:20px;font-size:14px;font-weight:500;line-height:1.5;}
+.msg-attente{background:#FEF3C715;border:1px solid #FDE68A;color:#92400E;}
+.msg-confirmee{background:#E0F2FE;border:1px solid #BAE6FD;color:#0369A1;}
+.msg-livraison{background:#EDE9FE;border:1px solid #DDD6FE;color:#5B21B6;}
+.msg-livree{background:#DCFCE7;border:1px solid #86EFAC;color:#166534;}
+
+/* Action WhatsApp */
+.wa-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:#25D366;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;transition:opacity .2s;}
+.wa-btn:hover{opacity:.9;}
+
+/* Erreur */
+.error-box{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:40px;text-align:center;}
+.error-icon{font-size:48px;margin-bottom:16px;}
+.error-title{font-size:18px;font-weight:700;margin-bottom:8px;}
+.error-text{color:var(--muted);font-size:14px;margin-bottom:24px;}
+
+/* Footer */
+.footer{text-align:center;padding:30px;color:var(--muted);font-size:12px;letter-spacing:2px;margin-top:20px;}
+</style></head><body>
+
+<nav class="nav">
+  <a href="/shop" class="nav-brand">AM<span>AN</span></a>
+  <a href="/shop" class="nav-back">← Retour à la boutique</a>
+</nav>
+
+<div class="page">
+  <div class="page-title">📦 Suivi de commande</div>
+  <div class="page-sub">Entrez votre numéro de commande pour suivre votre livraison en temps réel</div>
+
+  <!-- FORMULAIRE RECHERCHE -->
+  <div class="search-box">
+    <label class="search-label">Numéro de commande</label>
+    <form class="search-row" method="GET" action="/suivi">
+      <input class="search-input" name="id" type="number" placeholder="Ex: 12" value="{{ commande_id or '' }}" required>
+      <button class="search-btn" type="submit">Suivre →</button>
+    </form>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted);">💡 Votre numéro de commande vous a été communiqué par WhatsApp après votre commande</div>
+  </div>
+
+  {% if commande %}
+  {% set steps = ["en_attente","confirmee","en_livraison","livree"] %}
+  {% set step_idx = steps.index(commande[5]) if commande[5] in steps else 0 %}
+  {% set pct = [0, 33, 66, 100][step_idx] %}
+
+  <div class="result-box">
+    <div class="result-header">
+      <div>
+        <div class="result-id">COMMANDE #{{ commande[0] }}</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px;color:white;">{{ commande[3] }}</div>
+      </div>
+      <div class="result-date">{{ commande[6] }}</div>
+    </div>
+    <div class="result-body">
+      <div class="result-client">Client : <strong>{{ commande[1] }}</strong></div>
+      <span class="result-montant">{{ "{:,}".format(commande[4]) }} FCFA</span>
+
+      <!-- PIPELINE -->
+      <div class="pipeline">
+        <div style="position:relative;">
+          <div class="pipe-steps">
+            <div class="pipe-line"></div>
+            <div class="pipe-line-fill" style="width:calc({{ pct }}% - 36px);"></div>
+            {% for i, (emoji, label) in [(0,('📥','Reçue')),(1,('✅','Confirmée')),(2,('🚚','En route')),(3,('🎉','Livrée'))] %}
+            <div class="pipe-step">
+              <div class="pipe-dot {% if i < step_idx %}done{% elif i == step_idx %}active{% else %}pending{% endif %}">
+                {{ emoji }}
+              </div>
+              <div class="pipe-label {% if i < step_idx %}done{% elif i == step_idx %}active{% endif %}">{{ label }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- MESSAGE STATUT -->
+      {% if commande[5] == "en_attente" %}
+      <div class="status-msg msg-attente">⏳ <strong>Commande reçue</strong> — Nous avons bien reçu votre commande. Notre équipe va la confirmer sous peu et vous contactera par WhatsApp.</div>
+      {% elif commande[5] == "confirmee" %}
+      <div class="status-msg msg-confirmee">✅ <strong>Commande confirmée</strong> — Votre commande est confirmée et en cours de préparation. Vous recevrez un message dès l'expédition.</div>
+      {% elif commande[5] == "en_livraison" %}
+      <div class="status-msg msg-livraison">🚚 <strong>En cours de livraison</strong> — Votre commande est en route ! Notre livreur vous contactera bientôt pour la remise.</div>
+      {% elif commande[5] == "livree" %}
+      <div class="status-msg msg-livree">🎉 <strong>Commande livrée</strong> — Votre commande a bien été livrée. Merci de votre confiance ! Revenez vite sur AMAN.</div>
+      {% endif %}
+
+      <!-- INFOS SUPPLÉMENTAIRES -->
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-label">Transporteur</div>
+          <div class="info-value {% if not commande[8] %}empty{% endif %}">{{ commande[8] or "En attente..." }}</div>
+        </div>
+        <div class="info-card">
+          <div class="info-label">N° de suivi</div>
+          <div class="info-value {% if not commande[7] %}empty{% endif %}">{{ commande[7] or "En attente..." }}</div>
+        </div>
+        <div class="info-card">
+          <div class="info-label">Téléphone</div>
+          <div class="info-value">{{ commande[2] }}</div>
+        </div>
+        <div class="info-card">
+          <div class="info-label">Adresse</div>
+          <div class="info-value {% if not commande[9] %}empty{% endif %}">{{ commande[9] or "Non renseignée" }}</div>
+        </div>
+      </div>
+
+      <!-- WHATSAPP -->
+      {% set tel = commande[2]|replace(" ","")|replace("+","") %}
+      <a class="wa-btn" href="https://wa.me/22901000000?text=Bonjour AMAN, je veux des infos sur ma commande %23{{ commande[0] }}" target="_blank">
+        💬 Contacter AMAN sur WhatsApp
+      </a>
+    </div>
+  </div>
+
+  {% elif erreur %}
+  <div class="error-box">
+    <div class="error-icon">🔍</div>
+    <div class="error-title">Commande introuvable</div>
+    <div class="error-text">Aucune commande trouvée avec le numéro <strong>#{{ commande_id }}</strong>.<br>Vérifiez votre numéro ou contactez-nous sur WhatsApp.</div>
+    <a class="wa-btn" href="https://wa.me/22901000000?text=Bonjour AMAN, je cherche ma commande" target="_blank">
+      💬 Contacter AMAN
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="footer">© 2026 AMAN · TRUST · SAFETY · QUALITY · COTONOU, BÉNIN</div>
+</body></html>'''
+
+@app.route('/suivi')
+def suivi():
+    commande_id = request.args.get('id', '').strip()
+    commande = None
+    erreur = False
+    if commande_id:
+        try:
+            conn = get_conn()
+            commande = conn.cursor().execute(
+                "SELECT * FROM commandes WHERE id=?", (int(commande_id),)
+            ).fetchone()
+            conn.close()
+            if not commande:
+                erreur = True
+        except:
+            erreur = True
+    return render_template_string(SUIVI_PAGE,
+        commande=commande, commande_id=commande_id, erreur=erreur)
 
 @app.route('/export')
 def export_excel():
