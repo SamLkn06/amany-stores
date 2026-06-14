@@ -2,17 +2,28 @@ from flask import Flask, render_template_string, request, redirect, session, sen
 import openpyxl, io, os
 
 # ─── DATABASE : PostgreSQL (prod) ou SQLite (local) ──────────────
-import sqlite3
-DB = os.environ.get("DB_PATH", "boutique.db")
-def get_conn():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
-PH = "?"
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 def q(sql):
+    """Convertit ? en %s si PostgreSQL"""
     if DATABASE_URL:
         return sql.replace("?", "%s")
     return sql
+
+if DATABASE_URL:
+    import psycopg2
+    def get_conn():
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    PH = "%s"
+else:
+    import sqlite3
+    DB = os.environ.get("DB_PATH", "boutique.db")
+    def get_conn():
+        conn = sqlite3.connect(DB)
+        conn.row_factory = sqlite3.Row
+        return conn
+    PH = "?"
 
 app = Flask(__name__)
 app.secret_key = "aman2026secret"
