@@ -9,6 +9,10 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     return conn
 PH = "?"
+def q(sql):
+    if DATABASE_URL:
+        return sql.replace("?", "%s")
+    return sql
 
 app = Flask(__name__)
 app.secret_key = "aman2026secret"
