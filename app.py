@@ -66,7 +66,7 @@ def init_db():
             ("Zendrop","zendrop.com | App Shopify","Plateforme B2B 🌐","Produits Chine | Livraison mondiale | Compatible Shopify"),
             ("Banggood","banggood.com","Chine/Europe 🌐","Tech & électronique | Livraison Afrique | Prix compétitifs"),
         ]
-        c.executemany("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)", fournisseurs)
+        c.executemany(q("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)"), fournisseurs)
     conn.commit()
     conn.close()
 
@@ -501,7 +501,7 @@ def vendre():
 def supprimer(id):
     if not session.get('ok'): return redirect('/login')
     conn = get_conn()
-    conn.cursor().execute("DELETE FROM ventes WHERE id=?", (id,))
+    conn.cursor().execute(q("DELETE FROM ventes WHERE id=?"), (id,))
     conn.commit(); conn.close()
     return redirect('/')
 
@@ -514,7 +514,7 @@ def produit_ajouter():
     description = request.form.get('description','').strip()
     image_url = request.form.get('image_url','').strip()
     conn = get_conn()
-    conn.cursor().execute("INSERT INTO produits (nom,prix,stock,description,image_url) VALUES (?,?,?,?,?)",
+    conn.cursor().execute(q("INSERT INTO produits (nom,prix,stock,description,image_url) VALUES (?,?,?,?,?)"),
         (nom,prix,stock,description,image_url))
     conn.commit(); conn.close()
     return redirect('/catalogue?msg=Produit ajouté ✓')
@@ -523,7 +523,7 @@ def produit_ajouter():
 def produit_supprimer(nom):
     if not session.get('ok'): return redirect('/login')
     conn = get_conn()
-    conn.cursor().execute("DELETE FROM produits WHERE nom=?", (nom,))
+    conn.cursor().execute(q("DELETE FROM produits WHERE nom=?"), (nom,))
     conn.commit(); conn.close()
     return redirect('/catalogue?msg=Produit supprimé')
 
@@ -565,7 +565,7 @@ def commandes_statut(id):
     if not session.get('ok'): return redirect('/login')
     statut = request.form['statut']
     conn = get_conn()
-    conn.cursor().execute("UPDATE commandes SET statut=? WHERE id=?", (statut, id))
+    conn.cursor().execute(q("UPDATE commandes SET statut=? WHERE id=?"), (statut, id))
     conn.commit(); conn.close()
     return redirect('/commandes?msg=Statut mis à jour ✓')
 
@@ -573,7 +573,7 @@ def commandes_statut(id):
 def commandes_supprimer(id):
     if not session.get('ok'): return redirect('/login')
     conn = get_conn()
-    conn.cursor().execute("DELETE FROM commandes WHERE id=?", (id,))
+    conn.cursor().execute(q("DELETE FROM commandes WHERE id=?"), (id,))
     conn.commit(); conn.close()
     return redirect('/commandes')
 
@@ -596,7 +596,7 @@ def fournisseurs_ajouter():
     pays = request.form.get('pays','').strip()
     note = request.form.get('note','').strip()
     conn = get_conn()
-    conn.cursor().execute("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)",
+    conn.cursor().execute(q("INSERT INTO fournisseurs (nom,contact,pays,note) VALUES (?,?,?,?)"),
         (nom, contact, pays, note))
     conn.commit(); conn.close()
     return redirect('/fournisseurs?msg=Fournisseur ajouté ✓')
@@ -605,7 +605,7 @@ def fournisseurs_ajouter():
 def fournisseurs_supprimer(id):
     if not session.get('ok'): return redirect('/login')
     conn = get_conn()
-    conn.cursor().execute("DELETE FROM fournisseurs WHERE id=?", (id,))
+    conn.cursor().execute(q("DELETE FROM fournisseurs WHERE id=?"), (id,))
     conn.commit(); conn.close()
     return redirect('/fournisseurs')
 
@@ -878,7 +878,7 @@ def stats():
     for i in range(6, -1, -1):
         d = (date.today() - timedelta(days=i)).strftime("%Y-%m-%d")
         label = (date.today() - timedelta(days=i)).strftime("%d/%m")
-        total_j = c.execute("SELECT COALESCE(SUM(montant),0) FROM ventes WHERE date LIKE ?", (d+'%',)).fetchone()[0]
+        total_j = c.execute(q("SELECT COALESCE(SUM(montant),0) FROM ventes WHERE date LIKE ?"), (d+'%',)).fetchone()[0]
         jours_labels.append(label)
         jours_data.append(total_j)
     # Répartition produits
@@ -911,7 +911,7 @@ def livraisons_expedition(id):
     numero_suivi = request.form.get('numero_suivi','').strip()
     conn = get_conn()
     conn.cursor().execute(
-        "UPDATE commandes SET statut='en_livraison', transporteur=?, numero_suivi=? WHERE id=?",
+        q("UPDATE commandes SET statut='en_livraison', transporteur=?, numero_suivi=? WHERE id=?"),
         (transporteur, numero_suivi, id))
     conn.commit(); conn.close()
     return redirect('/livraisons?msg=Expédition enregistrée ✓')
@@ -1634,7 +1634,7 @@ def produit_stock(id):
     if not session.get('ok'): return redirect('/login')
     stock = int(request.form['stock'])
     conn = get_conn()
-    conn.cursor().execute("UPDATE produits SET stock=? WHERE id=?", (stock, id))
+    conn.cursor().execute(q("UPDATE produits SET stock=? WHERE id=?"), (stock, id))
     conn.commit(); conn.close()
     return redirect('/catalogue?msg=Stock mis à jour ✓')
 
@@ -1651,14 +1651,26 @@ def shop_commander():
     telephone = request.form['telephone'].strip()
     produit = request.form['produit']
     adresse = request.form.get('adresse','').strip()
-    conn = get_conn()
-    c = conn.cursor()
-    prix = c.execute("SELECT prix FROM produits WHERE nom=?", (produit,)).fetchone()
-    montant = prix[0] if prix else 0
-    c.execute(
-        ("INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (%s,%s,%s,%s,%s,NOW())" if DATABASE_URL else "INSERT INTO commandes (client,telephone,produit,montant,statut,date) VALUES (?,?,?,?,?,datetime('now','localtime'))"),
-        (client, telephone, produit, montant, 'en_attente'))
-    conn.commit(); conn.close()
+    paiement = request.form.get('paiement','livraison').strip()
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        if DATABASE_URL:
+            prix_row = c.execute("SELECT prix FROM produits WHERE nom=%s", (produit,)).fetchone()
+            montant = prix_row[0] if prix_row else 0
+            c.execute(
+                "INSERT INTO commandes (client,telephone,produit,montant,statut,adresse,date) VALUES (%s,%s,%s,%s,%s,%s,NOW())",
+                (client, telephone, produit, montant, 'en_attente', adresse))
+        else:
+            prix_row = c.execute(q("SELECT prix FROM produits WHERE nom=?"), (produit,)).fetchone()
+            montant = prix_row[0] if prix_row else 0
+            c.execute(
+                "INSERT INTO commandes (client,telephone,produit,montant,statut,adresse,date) VALUES (?,?,?,?,?,?,datetime('now','localtime'))",
+                (client, telephone, produit, montant, 'en_attente', adresse))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        return f"Erreur: {e}", 500
     return render_template_string('''<!DOCTYPE html><html><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>AMAN — Commande confirmée</title>
@@ -1874,7 +1886,7 @@ def suivi():
         try:
             conn = get_conn()
             commande = conn.cursor().execute(
-                "SELECT * FROM commandes WHERE id=?", (int(commande_id),)
+                q("SELECT * FROM commandes WHERE id=?"), (int(commande_id),)
             ).fetchone()
             conn.close()
             if not commande:
